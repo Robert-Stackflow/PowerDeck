@@ -1,0 +1,39 @@
+{
+  "name": "presentation-library",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "单管理员 HTML 演示库：内容管理、权限与统一播放器",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "prestart": "npm run build",
+    "start": "node --env-file-if-exists=.env server/app.mjs",
+    "predev": "npm run build",
+    "dev": "node --env-file-if-exists=.env --watch server/app.mjs",
+    "build": "node scripts/build.mjs",
+    "sync:areal": "node --env-file-if-exists=.env scripts/sync-content.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs && node tests/timer-browser.mjs && node tests/references-browser.mjs && node tests/browser.mjs && node tests/settings-browser.mjs && node tests/visual-editor-browser.mjs && node tests/editor-workspace-browser.mjs",
+    "format": "prettier --write frontend server scripts tests presentations package.json README.md outputs/*.md",
+    "format:check": "prettier --check frontend server scripts tests presentations package.json README.md outputs/*.md",
+    "clean:qa": "node scripts/clean-qa.mjs"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "14.0.0",
+    "@simplewebauthn/server": "14.0.2",
+    "@xmldom/xmldom": "^0.9.12",
+    "katex": "0.16.22",
+    "lucide": "1.8.0",
+    "otpauth": "9.5.2",
+    "parse5": "^8.0.0",
+    "playwright": "1.62.1",
+    "pptxgenjs": "4.0.1",
+    "qrcode": "1.5.4",
+    "yauzl": "^3.4.0",
+    "yazl": "3.3.1"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}

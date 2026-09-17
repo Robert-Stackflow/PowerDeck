@@ -1,0 +1,120 @@
+.custom-select {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+.select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  text-align: left;
+  font-weight: 400;
+  height: 44px;
+  min-height: 44px;
+  color: var(--ink);
+  font-size: 13px;
+}
+.select-trigger:hover,
+.select-trigger[aria-expanded="true"] {
+  border-color: var(--border-hover);
+  background: #fcfefc;
+}
+.select-trigger .lucide {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  transition: transform 0.18s;
+}
+.select-trigger[aria-expanded="true"] .lucide {
+  transform: rotate(180deg);
+}
+.select-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 12px 36px #143a2726;
+  backdrop-filter: blur(16px);
+  max-height: 250px;
+  overflow: auto;
+  color: var(--ink);
+}
+.select-menu:popover-open {
+  animation: select-in 0.14s ease-out;
+}
+.select-menu::backdrop {
+  background: transparent;
+}
+.select-menu [role="option"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  text-align: left;
+  font-size: 13px;
+}
+.select-menu [role="option"].highlighted {
+  background: var(--light);
+}
+.select-menu [aria-selected="true"] {
+  color: var(--green);
+  font-weight: 600;
+}
+.select-menu .lucide {
+  width: 16px;
+  height: 16px;
+  opacity: 0;
+}
+.select-menu [aria-selected="true"] .lucide {
+  opacity: 1;
+}
+.library-toolbar > .custom-select {
+  width: 170px;
+  flex: none;
+}
+@keyframes select-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .select-menu:popover-open {
+    animation: none;
+  }
+}
+@media (max-width: 480px) {
+  .library-toolbar > .custom-select {
+    width: 145px;
+    min-width: 145px;
+  }
+}
+
+.select-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+label > .custom-select {
+  margin-top: 8px;
+}

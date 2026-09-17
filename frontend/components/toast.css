@@ -1,0 +1,73 @@
+/* Manual popover places notifications above native dialogs in the top layer. */
+#toast[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: max-content;
+  max-width: calc(100vw - 40px);
+  padding: 11px 17px;
+  border: 1px solid #ffffff24;
+  border-radius: 12px;
+  background: #203d34f5;
+  color: #f4faf7;
+  box-shadow: 0 8px 32px #0003;
+  backdrop-filter: blur(16px);
+  font:
+    13px/1.6 system-ui,
+    sans-serif;
+  text-align: center;
+  pointer-events: none;
+  z-index: 2147483647;
+  opacity: 0;
+  transform: none;
+  transition: none;
+}
+#toast[popover].visible {
+  opacity: 1;
+  animation: toast-enter 0.18s ease-out;
+}
+#toast[popover][data-position^="top"] {
+  top: max(22px, env(safe-area-inset-top));
+  bottom: auto;
+}
+#toast[popover][data-position^="bottom"] {
+  bottom: max(22px, env(safe-area-inset-bottom));
+  top: auto;
+}
+#toast[popover][data-position$="left"] {
+  left: 22px;
+  right: auto;
+}
+#toast[popover][data-position$="right"] {
+  right: 22px;
+  left: auto;
+}
+#toast[popover][data-position$="center"] {
+  left: 50%;
+  right: auto;
+  translate: -50% 0;
+}
+#toast[popover]::backdrop {
+  background: transparent;
+  pointer-events: none;
+}
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #toast[popover].visible {
+    animation: none;
+  }
+}
+@media print {
+  #toast[popover] {
+    display: none !important;
+  }
+}

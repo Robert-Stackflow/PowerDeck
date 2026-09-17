@@ -1,0 +1,374 @@
+:root {
+  --surface: #f1f5f2;
+  --stage: #e9edeb;
+  --control: #fff;
+  --secondary: #61776a;
+  --soft: #f8faf8;
+  --accent-ink: #276455;
+  --hover: #edf2ef;
+  --border-hover: #a7bfb0;
+  --focus-ring: #5d8b6820;
+}
+:root[data-theme="dark"] {
+  --bg: #111916;
+  --paper: #1a2520;
+  --ink: #deebe3;
+  --muted: #98ada1;
+  --line: #34463b;
+  --green: #78b99d;
+  --light: #2b4236;
+  --danger: #ed9a8e;
+  --surface: #24352b;
+  --stage: #111b15;
+  --control: #202e25;
+  --secondary: #b0c4b7;
+  --soft: #202e25;
+  --scroll-thumb: #465f4f;
+  --scroll-thumb-hover: #6b8977;
+  --accent-ink: #aed8bd;
+  --hover: #26392f;
+  --border-hover: #587461;
+  --focus-ring: #78b99d24;
+}
+.theme-setting {
+  margin: 26px 0 0;
+  padding: 0;
+  border: 0;
+}
+.theme-setting legend {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+.theme-options {
+  display: flex;
+  gap: 10px;
+}
+.theme-options label {
+  flex: 1;
+  position: relative;
+  cursor: pointer;
+}
+.theme-options input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+}
+.theme-options span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 15px 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--secondary);
+  background: var(--paper);
+}
+.theme-options input:checked + span {
+  border-color: var(--green);
+  background: var(--light);
+  color: var(--accent-ink);
+}
+.theme-options input:focus-visible + span {
+  outline: 3px solid #76a38955;
+  outline-offset: 2px;
+}
+.theme-options .lucide {
+  width: 18px;
+  height: 18px;
+}
+[data-theme="dark"]
+  :is(
+    .sidebar,
+    .editor-header,
+    .visual-toolbar,
+    .slide-rail,
+    .visual-inspector,
+    .inspector-tab-panel,
+    .source-panel,
+    .card-menu,
+    .settings-card,
+    .deck-card,
+    .auth-card,
+    dialog,
+    .editor-popover,
+    .editor-context-menu,
+    .select-menu,
+    .app-loading,
+    .skeleton-top,
+    .skeleton-rail,
+    .skeleton-inspector
+  ) {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme="dark"] :is(.library, .visual-stage, .skeleton-canvas) {
+  background: var(--stage);
+}
+[data-theme="dark"]
+  :where(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    textarea,
+    .button:not(.primary),
+    .select-trigger,
+    .number-control,
+    .search,
+    .color-control,
+    .slug-prefix,
+    .slug-prefix > span,
+    .editor-mode-switch,
+    .color-picker-actions button,
+    .security-symbol
+  ) {
+  background: var(--control);
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme="dark"]
+  :is(.number-control input, .search input, .slug-prefix input) {
+  background: transparent !important;
+}
+[data-theme="dark"] :is(.button.primary, .primary) {
+  background: #3e8162;
+  color: #fff;
+  border-color: #3e8162;
+}
+[data-theme="dark"]
+  :is(
+    .slide-thumb[aria-current="page"],
+    .editor-mode-switch button[aria-selected="true"],
+    .text-style-actions button[aria-pressed="true"],
+    .shape-grid button:hover,
+    .editor-context-menu button:hover
+  ) {
+  background: var(--light);
+  color: #bbdfcc;
+}
+[data-theme="dark"]
+  :is(
+    label,
+    .property-section h3,
+    .slide-thumb-title,
+    .visual-toolbar-end,
+    .security-copy p,
+    .settings-hint,
+    .settings-card h2,
+    .card-meta,
+    .deck-summary,
+    .library-header h1,
+    .library-toolbar,
+    .brand,
+    .auth-card h1,
+    .dialog-head h2,
+    .dialog-head .icon-button,
+    .share-item b,
+    .share-deck strong
+  ) {
+  color: var(--secondary);
+}
+[data-theme="dark"]
+  :is(
+    .icon-button,
+    .button.subtle,
+    .nav-item,
+    .account-name,
+    .color-picker-actions button,
+    .color-control,
+    .shape-grid button
+  ) {
+  color: var(--secondary);
+}
+[data-theme="dark"]
+  :is(
+    .brand,
+    .account-name.active,
+    .nav-item.active,
+    .editor-header h1,
+    .visual-panel-head h2
+  ) {
+  color: var(--ink);
+}
+[data-theme="dark"]
+  :is(
+    .inspector-divider,
+    .editor-menu-divider,
+    .number-buttons,
+    .property-section,
+    .visual-panel-head,
+    .editor-tabs
+  ) {
+  border-color: var(--line);
+}
+[data-theme="dark"] :is(.avatar, .sidebar .account-name.active .avatar) {
+  background: var(--light);
+  color: #a7d7bd;
+}
+[data-theme="dark"] .save-indicator {
+  background: transparent;
+  color: #a7d7bd;
+}
+[data-theme="dark"]
+  :is(
+    .share-deck,
+    .badge,
+    .font-asset,
+    .asset-item,
+    .share-dialog .share-list
+  ) {
+  background: var(--surface);
+  color: var(--secondary);
+}
+[data-theme="dark"] .slide-thumb-preview {
+  border-color: #536b5b;
+}
+[data-theme="dark"] .slide-thumb[aria-current="page"] .slide-thumb-preview {
+  border-color: #88ba9f;
+  box-shadow: 0 0 0 1px #88ba9f;
+}
+[data-theme="dark"] .editor-popover input.color-hue {
+  background: linear-gradient(to right, red, #ff0, #0f0, #0ff, #00f, #f0f, red);
+}
+[data-theme="dark"] :is(.skeleton-rail i, .skeleton-inspector i) {
+  background: linear-gradient(110deg, #24352b 20%, #2c3f33 40%, #24352b 60%);
+  background-size: 200% 100%;
+}
+[data-theme="dark"] .loading-track {
+  background: #314e3d;
+}
+[data-theme="dark"] .formula-preview {
+  background: var(--control);
+  color: var(--ink);
+}
+@media (max-width: 480px) {
+  .theme-options {
+    gap: 6px;
+  }
+  .theme-options span {
+    font-size: 11px;
+    gap: 5px;
+  }
+}
+
+/* Composite fields own the surface and focus ring; their inputs stay transparent. */
+.search:focus-within {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.search input:not([type="checkbox"]) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  height: 100%;
+  box-shadow: none;
+}
+.search input::placeholder {
+  color: var(--muted);
+}
+.select-menu [role="option"].highlighted {
+  background: var(--hover);
+}
+.select-menu [aria-selected="true"] {
+  color: var(--accent-ink);
+}
+.select-menu [role="option"] + [role="option"] {
+  margin-top: 2px;
+}
+:is(
+  .icon-button,
+  .nav-item,
+  .account-name,
+  .card-menu button,
+  .select-menu [role="option"]
+) {
+  transition:
+    background-color 0.14s,
+    color 0.14s;
+}
+[data-theme="dark"]
+  :is(.button:not(.primary), .select-trigger, .color-control):hover,
+[data-theme="dark"] .select-trigger[aria-expanded="true"] {
+  background: var(--hover);
+  border-color: var(--border-hover);
+}
+[data-theme="dark"] .button.subtle {
+  background: transparent;
+  border-color: transparent;
+}
+[data-theme="dark"]
+  :is(
+    .icon-button,
+    .button.subtle,
+    .nav-item:not(.active),
+    .account-name:not(.active),
+    .card-menu button,
+    .text-style-actions button:not([aria-pressed="true"]),
+    .number-buttons button
+  ):hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+[data-theme="dark"] .button.primary:hover {
+  background: #4b9472;
+  border-color: #4b9472;
+}
+[data-theme="dark"] .dialog-head > .icon-button {
+  background: var(--soft);
+  border-color: var(--line);
+  color: var(--secondary);
+}
+[data-theme="dark"] .dialog-head > .icon-button:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+[data-theme="dark"] :is(input, textarea):focus,
+[data-theme="dark"] :is(.number-control, .slug-prefix):focus-within {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+[data-theme="dark"] .visual-notes-field textarea:focus {
+  box-shadow: none;
+}
+[data-theme="dark"]
+  :is(.asset-item, .font-asset, .share-item, .new-link, .card-actions) {
+  border-color: var(--line);
+}
+[data-theme="dark"]
+  :is(.card-menu, .select-menu, .editor-popover, .editor-context-menu) {
+  box-shadow: 0 12px 36px #0005;
+}
+[data-theme="dark"] dialog::backdrop {
+  background: #050c0899;
+}
+[data-theme="dark"]
+  :is(
+    .editor-tabs button,
+    .color-popover h3,
+    .number-buttons button,
+    .inspector-empty,
+    .asset-item small,
+    .empty-state,
+    .empty-state h2
+  ) {
+  color: var(--muted);
+}
+[data-theme="dark"] .editor-tabs button[aria-selected="true"] {
+  color: var(--accent-ink);
+  border-color: var(--green);
+}
+[data-theme="dark"] :is(input, textarea)::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+[data-theme="dark"] .save-indicator[data-state="pending"] {
+  color: #e3c482;
+  background: transparent;
+}
+[data-theme="dark"] .save-indicator[data-state="error"] {
+  color: var(--danger);
+  background: transparent;
+}

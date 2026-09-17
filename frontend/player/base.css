@@ -1,0 +1,68 @@
+@import url("/static/katex/katex.min.css");
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #111923;
+  color: #142238;
+  font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+a {
+  color: #41669b;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+#stage {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#deck {
+  position: relative;
+  width: var(--slide-width, 1600px);
+  height: var(--slide-height, 900px);
+  flex-shrink: 0;
+  transform: scale(var(--scale, 1));
+  transform-origin: center;
+}
+.slide {
+  position: absolute;
+  inset: 0;
+  width: var(--slide-width, 1600px);
+  height: var(--slide-height, 900px);
+  display: none;
+  overflow: hidden;
+  background: #fff;
+}
+.slide.active {
+  display: block;
+}
+[hidden] {
+  display: none !important;
+}
+.ink-layer {
+  width: var(--slide-width, 1600px) !important;
+  height: var(--slide-height, 900px) !important;
+}
+
+#stage:focus {
+  outline: none;
+}
+
+@media screen {
+  .slide.is-prepared:not(.active) {
+    display: block;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "3": {
+    "title": "1. 后训练的变化过程",
+    "refs": [],
+    "notes": "时间线强调影响与应用，并不把 2022 作为 SFT/RLHF 的发明时间。GRPO 由 DeepSeekMath 在 2024 年提出，DeepSeek-R1 在 2025 年推动了推理 RL 的广泛讨论。R1-Zero 未使用 SFT 冷启动，R1 使用了冷启动与多阶段训练。CoT 是可用于提示与训练数据的推理形式。每个事件下方有对应一手来源。"
+  },
+  "4": {
+    "title": "1. 后训练的五种范式",
+    "refs": ["instruct", "grpo", "ragen", "distill"],
+    "notes": "五类不是严格互斥的数学分类。例如 Agentic RL 可以使用可验证奖励，也可以加入教师蒸馏。DPO 属于偏好优化路线，本次按用户指定的五类讲解，RLHF 页采用经典奖励模型 + PPO 路线。"
+  },
+  "5": {
+    "title": "1. 后训练的五种范式 · SFT",
+    "refs": ["instruct"],
+    "notes": "πθ 表示待训练的策略模型，x 为输入，y* 为示范答案，m_t 为目标 token mask。此处省略 batch/token 归一化常数。Teacher forcing 不需要在线环境或奖励模型。SFT 可以使用人工或模型生成的高质量数据。"
+  },
+  "6": {
+    "title": "1. 后训练的五种范式 · RLHF",
+    "refs": ["instruct", "chat"],
+    "notes": "奖励模型训练与策略训练是两个阶段。策略训练期间通常冻结奖励模型与参考模型。偏好分数是人类偏好的代理，不能等同于答案正确性。展示的是简化的带 KL 正则的期望回报目标，未展示 InstructGPT 的预训练损失混合项与 PPO value loss。"
+  },
+  "7": {
+    "title": "1. 后训练的五种范式 · RLVR",
+    "refs": ["grpo", "r1"],
+    "notes": "公式是常见 GRPO 简化写法：πold 为采样策略，πref 为参考策略，ε 为裁剪范围，δ 是防止除零的小常数。期望覆盖提示及旧策略生成的一组样本，T_i 是回答长度。上横线 D_KL 表示按生成 token 求平均的 KL 正则或其估计量。RLVR 定义奖励来源，不限定只能使用 GRPO，也可采用 PPO 等。"
+  },
+  "8": {
+    "title": "1. 后训练的五种范式 · Agentic RL",
+    "refs": ["ragen", "async"],
+    "notes": "Agentic RL 是多步交互结构，不是一种独有优化算法。τ 包含模型生成的行动 token 和外部环境观测，ρ_t 的分母来自生成这些 token 时的策略版本。Â_t 可由 Critic/GAE 或组相对奖励构造。本页未展示具体算法的价值函数损失和熵项。环境执行与策略生成反复交替，最后或过程中获得奖励。"
+  },
+  "9": {
+    "title": "1. 后训练的五种范式 · OPD",
+    "refs": ["gkd", "opd", "distill"],
+    "notes": "πT 是冻结教师，πθ 是学生。这个公式是序列层面的 KL 目标，展开后期望也依赖学生策略。实际实现需使用正确的策略梯度 / 重要性采样估计，不能仅把采样后的 log-ratio 当作普通固定数据监督损失求导。全词表 token KL 和仅采样 token 的估计在实现和代价上也有差异。"
+  },
+  "10": {
+    "title": "2. RL 训练的流程",
+    "refs": ["areal", "async"],
+    "notes": "参考用户提供的 RL 训练循环图重绘。Reward 步骤为逻辑概念，工程实现中优势计算可在训练数据准备阶段完成。训练所需 log-prob、参考策略或 Critic 的计算位置也可随系统变化。权重同步是更新推理策略版本，不是同步优化器状态。"
+  },
+  "11": {
+    "title": "2. RL 训练的工程挑战",
+    "refs": ["areal", "async", "distill"],
+    "notes": "按用户提供的工程挑战图整理。没有把图中“数小时”“100 TB”等依赖规模的数字写成普遍事实。精度差异、log-prob 偏移、异步 staleness 与分片布局转换都需要结合具体后端测量。OPD 还会引入教师推理、多教师调度或全词表传输开销。"
+  },
+  "12": {
+    "title": "2. AReaL：A Large-Scale Asynchronous Reinforcement Learning System",
+    "refs": ["repo", "areal", "v2"],
+    "notes": "AReaL 是连接 LLM Agent 应用与强化学习训练的系统。示意图概括主要能力层次，下一页讲解全异步与训推分离，再分别展开 Off-Policy 修正、2.0 微服务架构和 DTE。"
+  },
+  "13": {
+    "title": "2. AReaL：全异步与训推分离",
+    "refs": ["areal", "async", "repo"],
+    "notes": "2025 年论文提出全异步训练、部分 rollout 和 staleness 控制。2.77 倍为 2026-03-02 更新的 v5 摘要结果，不应视作任意模型或硬件上的保证。2.0 的微服务架构于 2026-07-01 在官方仓库发布。仓库核对快照 e839b6f37a40d3a5da3de93bba1c3ec0252b416a。"
+  },
+  "14": {
+    "title": "2. AReaL：Off-Policy 修正",
+    "refs": ["offpolicy", "async", "areal"],
+    "notes": "公式依据 AReaL 官方算法实践文档中的 Decoupled PPO。三个概率均在同一个已生成 token 及其历史条件下计算。实现通过重算近端 log-prob，把 proximal/behavior 重要性权重与 training/proximal 的 PPO 裁剪比率分开。文档中 proximal 是近期训练策略的冻结快照。max_head_offpolicyness 继续约束异步滞后；长轨迹还可能跨多个生成版本。"
+  },
+  "15": {
+    "title": "2. AReaL 2.0：微服务化",
+    "refs": ["repo", "hermes", "v2"],
+    "notes": "结构依据 AReaL 官方仓库 2.0 公告与 Hermes 示例，图表示主要逻辑关系，不展开 RPC、控制器、数据传输和资源调度细节。此前原稿将权重同步写作“增量同步、非阻塞”，本页采用更一般的权重分发与版本切换描述，避免把特定后端能力泛化为所有部署。"
+  },
+  "16": {
+    "title": "2. AReaL DTE：高效增量权重传输",
+    "refs": ["dtepaper", "dterepo", "dteexample"],
+    "notes": "AReaL-DTE 论文 2608.00455 在 Qwen3-8B 和 Qwen3-30B-A3B 的四种在线 RL 工作负载上报告少于 2% 的 BF16 元素变化。DTE 使用 AdamW 逆更新恢复被覆盖前的值，避免持有完整旧权重快照，并将索引直接重映射为接收端本地分片。稀疏补丁按索引覆盖新值，不是浮点差值累加。公开 AReaL 示例为 Megatron actor 到独立调度的 SGLang；该 AdamW 检测路径目前要求相邻同步之间一次优化器更新，即 ppo_n_minibatches=1。首轮及必要时全量同步；高变化密度可按张量回退。"
+  },
+  "18": {
+    "title": "1. AReaL-RSI",
+    "refs": ["repo", "v2"],
+    "notes": "公开仓库和论文未确认一个以 AReaL-RSI 命名的独立已发布模块。本页结合 AutoResearch 设计与现有 AReaL 训练基础，明确为研究方向。自动尝试实验不等同于已经验证的递归自我改进，效果需要固定预算和独立评测支持。"
+  },
+  "19": {
+    "title": "2. Online Learning",
+    "refs": ["online", "hermes", "claw"],
+    "notes": "Online 表示数据来自持续交互，不要求每条反馈立刻更新一次权重，也不等同于严格 on-policy。官方 Hermes 当前示例按每组一条独立奖励轨迹训练，默认不直接使用 GRPO 的组内标准差归一化；需要多样本组时应另行配置完整数据路径。仓库文档还列出调度器和后端等适用限制。"
+  },
+  "20": {
+    "title": "3. Personalize",
+    "refs": ["claw", "online"],
+    "notes": "此页将个性化作为应用方向，不宣称 AReaL 已提供完整的多租户个性化产品。固定 api_key 用于会话续接，不等同于用户专属模型或参数隔离。对多用户的权重共享、数据权限和收益评测需要额外设计。示例对话为本演示的说明性内容。"
+  }
+}

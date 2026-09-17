@@ -1,0 +1,54 @@
+:root {
+  --scroll-thumb: #b8c6bd;
+  --scroll-thumb-hover: #8fa69a;
+}
+*,
+#notesBody,
+.overview-list,
+#overview,
+#notes {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  min-height: 28px;
+  background: var(--scroll-thumb);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scroll-thumb-hover);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+@supports selector(::-webkit-scrollbar) {
+  *,
+  #notesBody,
+  .overview-list,
+  #overview,
+  #notes {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+}
+@media (forced-colors: active) {
+  *,
+  #notesBody,
+  .overview-list,
+  #overview,
+  #notes {
+    scrollbar-color: auto;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: ButtonText;
+  }
+}

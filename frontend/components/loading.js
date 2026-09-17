@@ -1,0 +1,3 @@
+export function loadingMarkup(editor = false, { header = true } = {}) {
+  return `<div class="app-loading${editor ? " editor-loading" : ""}${header ? "" : " workspace-loading"}" role="status" aria-label="${editor ? "正在加载演示稿" : "正在加载"}">${editor ? `<div class="loading-skeleton">${header ? '<div class="skeleton-top"></div>' : ""}<div class="skeleton-rail"><i></i><i></i><i></i></div><div class="skeleton-canvas"></div><div class="skeleton-inspector"><i></i><i></i><i></i></div></div>` : ""}<div class="loading-brand"><img src="/static/favicon.svg" alt=""><div class="loading-track"><i></i></div></div></div>`;
+}

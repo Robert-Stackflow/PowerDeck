@@ -1,0 +1,349 @@
+#presentationTimer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  max-width: 192px;
+  transition:
+    max-width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    gap 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#controls #presentationTimer > button {
+  box-sizing: border-box;
+  width: 38px;
+  min-width: 38px;
+  height: 40px;
+}
+#controls #presentationTimer svg {
+  width: 18px;
+  height: 18px;
+}
+#controls #presentationTimer #timerDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 104px;
+  min-width: 104px;
+  padding: 0 12px;
+}
+#timerTotal {
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+#timerDetails small {
+  font-size: 10px;
+  color: #a8b3c3;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+#controls #timerToggle {
+  color: #d6dfeb;
+  background: #ffffff08;
+}
+#controls .running #timerToggle {
+  color: #ffd178;
+  background: #ffd17815;
+}
+#controls #timingReset.confirm-reset {
+  color: #ffd178;
+  background: #ffd17820;
+}
+#timingPanel button:focus-visible,
+#presentationTimer button:focus-visible {
+  outline: 2px solid #ffd178;
+  outline-offset: 3px;
+}
+#timingPanel {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(680px, calc(100dvh - 48px));
+  padding: 0;
+  overflow: hidden;
+  color: #e5edf5;
+  background: #242c39f5;
+  border: 1px solid #ffffff21;
+  border-radius: 20px;
+  backdrop-filter: blur(24px);
+  animation: dialog-in 0.2s ease-out;
+}
+#timingPanel[hidden] {
+  display: none;
+}
+#timingPanel .overlay-head {
+  flex-shrink: 0;
+  align-items: center;
+  padding: 22px 24px 18px;
+  margin: 0;
+  border-bottom: 1px solid #ffffff14;
+}
+#timingPanel h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 550;
+  color: inherit;
+}
+.timing-caption {
+  margin: 6px 0 0;
+  color: #a8b3c3;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.timing-caption-dot {
+  margin: 0 9px;
+  opacity: 0.6;
+}
+#timingPanel .dialog-close {
+  background: transparent;
+  border-color: transparent;
+  color: #a8b3c3;
+}
+#timingPanel .dialog-close:hover {
+  background: #ffffff10;
+  color: white;
+}
+.timing-table {
+  overflow: auto;
+  min-height: 0;
+  padding: 0 20px 16px;
+}
+.timing-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.timing-table th,
+.timing-table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid #ffffff0c;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.timing-table th:first-child {
+  text-align: left;
+  font-weight: 400;
+}
+.timing-table thead {
+  position: sticky;
+  top: 0;
+  color: #8995a5;
+  background: #252d3a;
+  font-size: 11px;
+}
+.timing-table td {
+  white-space: nowrap;
+  color: #a8b3c3;
+}
+.timing-table .current {
+  color: #ffd178;
+  background: #ffd17808;
+}
+.timing-table .current td {
+  color: #ffd178;
+}
+.timing-number {
+  display: inline-block;
+  color: #8995a5;
+  margin-right: 12px;
+  font-size: 10px;
+}
+#timingPanel.closing {
+  animation: dialog-out 0.16s ease-in both;
+  pointer-events: none;
+}
+@media (max-width: 800px) {
+  #controls {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: max-content;
+  }
+  #presentationTimer {
+    order: -1;
+    flex-basis: 100%;
+    justify-content: center;
+    max-width: none;
+    margin-bottom: 5px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #ffffff20;
+  }
+  #controls #timerDivider {
+    display: none;
+  }
+}
+@media (max-width: 480px) {
+  #controls {
+    gap: 1px;
+    padding: 7px;
+  }
+  #controls button {
+    width: 30px;
+    min-width: 30px;
+    height: 38px;
+  }
+  #controls #counter {
+    width: 48px;
+    min-width: 48px;
+  }
+  #controls #inkBtn {
+    width: 34px;
+    min-width: 34px;
+  }
+  #controls .nav-divider {
+    width: 5px;
+    min-width: 5px;
+    margin: 0;
+    flex-basis: 5px;
+  }
+  #controls .nav-divider::after {
+    left: 2px;
+  }
+  #timingPanel .overlay-head {
+    padding: 18px;
+  }
+  .timing-table {
+    padding: 0 10px 12px;
+  }
+}
+@media (max-width: 360px) {
+  #controls {
+    gap: 0;
+    padding: 6px;
+  }
+  #controls button {
+    width: 28px;
+    min-width: 28px;
+  }
+  #controls #counter {
+    width: 44px;
+    min-width: 44px;
+  }
+  #controls .nav-divider {
+    margin: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #controls,
+  #controls > *,
+  #presentationTimer,
+  #presentationTimer > *,
+  #timerDetails small {
+    transition-duration: 0.01ms !important;
+  }
+}
+@media print {
+  #presentationTimer,
+  #timingPanel {
+    display: none !important;
+  }
+}
+
+/* The same dock contracts to its running time and expands in place. */
+body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
+  #controls {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+  flex-wrap: nowrap;
+  gap: 0;
+  padding: 5px 9px;
+  border-radius: 12px;
+}
+body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
+  #controls
+  > :not(#presentationTimer) {
+  display: flex;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
+  #presentationTimer {
+  order: initial;
+  flex-basis: auto;
+  max-width: 76px;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
+  #presentationTimer
+  > :not(#timerDetails) {
+  width: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
+  #controls
+  #presentationTimer
+  #timerDetails {
+  width: 68px;
+  min-width: 68px;
+  height: 32px;
+  padding: 0 7px;
+}
+body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
+  #controls
+  #presentationTimer
+  > :not(#timerDetails) {
+  width: 0;
+  min-width: 0;
+}
+body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
+  #timerDetails
+  small {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-3px);
+}
+body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
+  #dockReveal {
+  opacity: 0;
+  pointer-events: none;
+}
+#controls {
+  transition:
+    opacity 0.2s,
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    padding 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    gap 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#controls > *,
+#presentationTimer > * {
+  transition:
+    width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    min-width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    max-width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    margin 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    padding 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.18s ease,
+    background 0.15s,
+    color 0.15s;
+}
+#timerDetails small {
+  max-height: 14px;
+  opacity: 1;
+  transform: translateY(0);
+  overflow: hidden;
+  transition:
+    max-height 0.22s ease,
+    opacity 0.16s ease,
+    transform 0.22s ease;
+}

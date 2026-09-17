@@ -1,0 +1,192 @@
+/* Shared divider spacing for the five paradigms and related algorithm pages. */
+.paradigm-layout {
+  grid-template-columns: 530px minmax(0, 1fr);
+  gap: 36px;
+}
+.paradigm-copy {
+  padding-left: 54px;
+  min-width: 0;
+}
+.paradigm-copy .paradigm-intro {
+  font-size: 28px;
+}
+.rlvr-v3 .objective .math,
+.agent-grpo-v5 .objective .math {
+  font-size: 22px;
+}
+.rlvr-v3 .short-defs .math {
+  font-size: 21px;
+}
+.agent-grpo-v5 .paradigm-intro {
+  margin-bottom: 25px;
+}
+.agent-grpo-v5 .short-defs {
+  margin-top: 19px;
+}
+.agent-grpo-v5 .short-defs .math {
+  font-size: 24px;
+}
+.agent-grpo-v5 .short-defs p {
+  font-size: 21px;
+  margin-top: 14px;
+}
+.agent-grpo-v5 .concepts {
+  margin-top: 23px;
+  gap: 18px;
+}
+.opd-v5 .paradigm-intro {
+  max-width: 770px;
+  margin-bottom: 28px;
+  line-height: 1.55;
+}
+.opd-v5 .objective .math {
+  font-size: 27px;
+}
+.opd-v5 .concepts {
+  gap: 22px;
+  margin-top: 28px;
+}
+.opd-v5 .paradigm-copy .concept {
+  grid-template-columns: 136px 1fr;
+}
+.dpo-v5 .objective .math {
+  font-size: 27px;
+}
+.dpo-v5 .concepts {
+  gap: 27px;
+  margin-top: 33px;
+}
+.policy-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 70px;
+  margin-top: 10px;
+}
+.policy-comparison article {
+  position: relative;
+}
+.policy-comparison article + article:before {
+  content: "";
+  position: absolute;
+  left: -35px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid #d9dee5;
+}
+.policy-comparison h2 {
+  font-size: 36px;
+  color: #376ca5;
+  margin-bottom: 13px;
+}
+.policy-comparison article + article h2 {
+  color: #967544;
+}
+.policy-definition {
+  font-size: 25px;
+  color: #68778e;
+  margin-bottom: 30px;
+}
+.policy-diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 340px;
+}
+.policy-example {
+  margin-top: 24px;
+  font-size: 23px;
+  line-height: 1.8;
+  color: #6b7b92;
+}
+.policy-example b {
+  color: #304d75;
+  font-weight: 600;
+}
+.policy-bottom {
+  position: absolute;
+  bottom: 5px;
+  left: 0;
+  right: 0;
+  padding-top: 24px;
+  border-top: 1px solid #d9dee5;
+  font-size: 26px;
+  color: #6a7c96;
+}
+.policy-bottom strong {
+  font-weight: 600;
+  color: #304d75;
+}
+.algorithm-comparison {
+  display: grid;
+  grid-template-columns: minmax(0, 1000px) 1fr;
+  gap: 45px;
+  align-items: center;
+  height: 100%;
+}
+.algorithm-paper {
+  margin: 0;
+  padding: 20px 0 0;
+  align-self: center;
+}
+.algorithm-paper img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  border: 1px solid #e3e6ed;
+  cursor: zoom-in;
+}
+.algorithm-paper figcaption {
+  text-align: center;
+  font-size: 17px;
+  color: #8190a4;
+  margin-top: 18px;
+}
+.algorithm-methods {
+  padding-left: 30px;
+  border-left: 1px solid #d9dee5;
+}
+.algorithm-methods section + section {
+  margin-top: 31px;
+}
+.algorithm-methods h2 {
+  font-size: 29px;
+  color: #3d6697;
+  margin-bottom: 9px;
+}
+.algorithm-methods p {
+  font-size: 23px;
+  color: #64768d;
+  line-height: 1.8;
+}
+.note-figures {
+  display: grid;
+  gap: 18px;
+  margin-top: 22px;
+}
+.note-figure {
+  margin: 0;
+  background: #fff;
+  border: 1px solid #e0e6ee;
+  border-radius: 10px;
+  padding: 13px;
+}
+.note-figure img {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: zoom-in;
+  background: #fff;
+}
+.note-figure figcaption {
+  font-size: 13px;
+  color: #738196;
+  margin-top: 12px;
+}
+.note-slide-title {
+  font-size: 21px !important;
+  font-weight: 600;
+  line-height: 1.5 !important;
+  color: #294362;
+  margin-bottom: 21px !important;
+}

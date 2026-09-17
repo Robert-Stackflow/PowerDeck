@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="/static/components/scrollbars.css" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <title>演示</title>
+    <link rel="stylesheet" href="/static/player/shell.css" />
+    <link rel="stylesheet" href="/static/components/loading.css" />
+  </head>
+  <body>
+    <div id="loading" role="status" aria-label="正在打开演示稿">
+      <div class="loading-brand">
+        <img src="/static/favicon.svg" alt="" />
+        <div class="loading-track"><i></i></div>
+      </div>
+    </div>
+    <iframe
+      id="playerFrame"
+      title="演示稿"
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals"
+      allow="fullscreen"
+      hidden
+    ></iframe>
+    <main id="error" hidden>
+      <div id="errorIcon"></div>
+      <h1 id="errorTitle"></h1>
+      <p id="errorMessage"></p>
+      <a href="/">返回演示库</a>
+    </main>
+    <script type="module" src="/static/player/loader.js"></script>
+  </body>
+</html>
