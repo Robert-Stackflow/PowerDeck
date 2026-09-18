@@ -91,7 +91,17 @@ export async function mountPlatformSettings(
 
   async function renderTeam() {
     const { users } = await api("/workspace-users");
-    teamPanel.innerHTML = `<section class="settings-card"><div class="settings-card-heading">${icon("group")}<div><h2>工作区成员</h2><p>管理成员角色与账号状态。</p></div><button id="addWorkspaceUser" class="button primary">${icon("plus")}添加成员</button></div><div class="workspace-user-list">${users.map((user) => `<article class="workspace-user${user.disabledAt ? " disabled" : ""}"><span class="avatar">${esc(user.username[0].toUpperCase())}</span><div class="workspace-user-copy"><b>${esc(user.username)}</b><small>${user.disabledAt ? "已停用" : "正常使用"}</small></div><div class="workspace-user-actions">${user.role === "owner" ? '<span class="badge shared">所有者</span>' : `${selectMarkup({ id: `workspaceRole-${user.id}`, value: user.role, options: roleOptions, label: `${user.username}的角色` })}<button type="button" class="button subtle" data-toggle-user="${user.id}" data-disabled="${Boolean(user.disabledAt)}">${user.disabledAt ? "启用" : "停用"}</button><button type="button" class="icon-button danger" data-delete-user="${user.id}" aria-label="删除成员">${icon("trash2")}</button>`}</div></article>`).join("")}</div></section>`;
+    const rows = users
+      .map((user) => {
+        const renameButton = `<button type="button" class="icon-button" data-rename-user="${user.id}" aria-label="修改 ${esc(user.username)} 的用户名" title="修改用户名">${icon("pencil")}</button>`,
+          actions =
+            user.role === "owner"
+              ? `${renameButton}<span class="badge shared">所有者</span>`
+              : `${renameButton}${selectMarkup({ id: `workspaceRole-${user.id}`, value: user.role, options: roleOptions, label: `${user.username}的角色` })}<button type="button" class="button subtle" data-toggle-user="${user.id}" data-disabled="${Boolean(user.disabledAt)}">${user.disabledAt ? "启用" : "停用"}</button><button type="button" class="icon-button danger" data-delete-user="${user.id}" aria-label="删除成员">${icon("trash2")}</button>`;
+        return `<article class="workspace-user${user.disabledAt ? " disabled" : ""}"><span class="avatar">${esc(user.username[0].toUpperCase())}</span><div class="workspace-user-copy"><b>${esc(user.username)}</b><small>${user.disabledAt ? "已停用" : "正常使用"}</small></div><div class="workspace-user-actions">${actions}</div></article>`;
+      })
+      .join("");
+    teamPanel.innerHTML = `<section class="settings-card"><div class="settings-card-heading">${icon("group")}<div><h2>工作区成员</h2><p>管理成员角色与账号状态。</p></div><button id="addWorkspaceUser" class="button primary">${icon("plus")}添加成员</button></div><div class="workspace-user-list">${rows}</div></section>`;
     enhanceSelects(teamPanel);
     teamPanel.querySelectorAll('[id^="workspaceRole-"]').forEach((input) => {
       input.dataset.userRole = input.id.slice("workspaceRole-".length);
@@ -99,7 +109,7 @@ export async function mountPlatformSettings(
     teamPanel.querySelector("#addWorkspaceUser").onclick = () =>
       showDialog(
         "添加工作区成员",
-        `<label>账号<input name="username" required maxlength="40" pattern="[a-zA-Z0-9_.\\-]{2,40}" autofocus></label><label>初始密码<input name="password" type="password" required minlength="10" maxlength="128"></label><label>角色${selectMarkup({ id: "newWorkspaceRole", name: "role", value: "editor", options: roleOptions, label: "成员角色" })}</label>`,
+        `<label>用户名<input name="username" required maxlength="40" pattern="[a-zA-Z0-9_.\\-]{2,40}" autofocus></label><label>初始密码<input name="password" type="password" required minlength="10" maxlength="128"></label><label>角色${selectMarkup({ id: "newWorkspaceRole", name: "role", value: "editor", options: roleOptions, label: "成员角色" })}</label>`,
         {
           submit: "添加",
           onSubmit: async (form) => {
@@ -113,6 +123,36 @@ export async function mountPlatformSettings(
           },
         },
       );
+    teamPanel.querySelectorAll("[data-rename-user]").forEach((button) => {
+      const user = users.find((item) => item.id === button.dataset.renameUser);
+      button.onclick = () =>
+        showDialog(
+          "修改用户名",
+          `<label>用户名<input name="username" value="${esc(user.username)}" required maxlength="40" pattern="[a-zA-Z0-9_.\\-]{2,40}" autofocus></label>`,
+          {
+            submit: "保存",
+            onSubmit: async (form) => {
+              const updated = await api(`/workspace-users/${user.id}`, {
+                method: "PATCH",
+                body: { username: form.get("username") },
+              });
+              if (updated.id === session.userId) {
+                session.username = updated.username;
+                const account = document.querySelector("#accountSettings"),
+                  avatar = account?.querySelector(".avatar"),
+                  name = account?.querySelector("span:last-child");
+                if (avatar)
+                  avatar.textContent = updated.username[0].toUpperCase();
+                if (name?.firstChild)
+                  name.firstChild.nodeValue = updated.username;
+              }
+              closeDialog();
+              await renderTeam();
+              toast("用户名已更新");
+            },
+          },
+        );
+    });
     teamPanel.querySelectorAll("[data-user-role]").forEach(
       (select) =>
         (select.onchange = async () => {

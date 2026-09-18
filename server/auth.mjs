@@ -130,12 +130,22 @@ export function createAuth(
       csrf,
     };
   }
-  const credentials = (data) => {
+  const normalizeUsername = (value) => {
+    const username = typeof value === "string" ? value.trim() : "";
     requireValue(
-      typeof data.username === "string" &&
-        /^[a-zA-Z0-9_.-]{2,40}$/.test(data.username),
+      /^[a-zA-Z0-9_.-]{2,40}$/.test(username),
       "账号使用 2–40 位字母、数字、点或下划线",
     );
+    return username;
+  };
+  const usernameExists = (username, excludedId = "") =>
+    !!db
+      .prepare(
+        "SELECT 1 FROM workspace_users WHERE username=? COLLATE NOCASE AND id<>? LIMIT 1",
+      )
+      .get(username, excludedId);
+  const credentials = (data) => {
+    data.username = normalizeUsername(data.username);
     requireValue(
       typeof data.password === "string" &&
         data.password.length >= 10 &&
@@ -224,11 +234,13 @@ export function createAuth(
         "账号或密码不正确",
       );
       syncOwner();
-      const selected = db
-        .prepare(
-          "SELECT * FROM workspace_users WHERE username=? AND disabled_at IS NULL",
-        )
-        .get(data.username);
+      const username =
+          typeof data.username === "string" ? data.username.trim() : "",
+        selected = db
+          .prepare(
+            "SELECT * FROM workspace_users WHERE username=? COLLATE NOCASE AND disabled_at IS NULL",
+          )
+          .get(username);
       if (!selected || !(await verify(data.password, selected.password)))
         throw new HttpError(401, "账号或密码不正确");
       if (selected.role === "owner") return security.finish(req, res, selected);
@@ -278,21 +290,17 @@ export function createAuth(
         "角色不正确",
       );
       const id = crypto.randomUUID(),
-        now = Date.now();
+        now = Date.now(),
+        encoded = await passwordHash(input.password);
+      if (usernameExists(input.username))
+        throw new HttpError(409, "用户名已存在");
       try {
         db.prepare(
           "INSERT INTO workspace_users(id,username,password,role,created_at,updated_at) VALUES(?,?,?,?,?,?)",
-        ).run(
-          id,
-          input.username,
-          await passwordHash(input.password),
-          input.role,
-          now,
-          now,
-        );
+        ).run(id, input.username, encoded, input.role, now, now);
       } catch (error) {
         if (String(error.message).includes("UNIQUE"))
-          throw new HttpError(409, "账号名称已存在");
+          throw new HttpError(409, "用户名已存在");
         throw error;
       }
       return userDTO(userById(id));
@@ -302,21 +310,39 @@ export function createAuth(
         .prepare("SELECT * FROM workspace_users WHERE id=?")
         .get(id);
       if (!selected) throw new HttpError(404, "成员不存在");
-      if (selected.role === "owner")
-        throw new HttpError(409, "所有者账号不能在此修改");
-      requireValue(
-        ["editor", "reviewer", "viewer"].includes(input.role),
-        "角色不正确",
-      );
-      db.prepare(
-        "UPDATE workspace_users SET role=?,disabled_at=?,updated_at=? WHERE id=?",
-      ).run(
-        input.role,
-        input.disabled === true ? Date.now() : null,
-        Date.now(),
-        id,
-      );
-      db.prepare("DELETE FROM sessions WHERE user_id=?").run(id);
+      const username = Object.hasOwn(input, "username")
+          ? normalizeUsername(input.username)
+          : selected.username,
+        role = Object.hasOwn(input, "role") ? input.role : selected.role,
+        disabledAt = Object.hasOwn(input, "disabled")
+          ? input.disabled === true
+            ? Date.now()
+            : null
+          : selected.disabled_at;
+      if (usernameExists(username, id))
+        throw new HttpError(409, "用户名已存在");
+      if (selected.role === "owner") {
+        requireValue(
+          role === "owner" && !disabledAt,
+          "不能修改所有者角色或状态",
+        );
+      } else {
+        requireValue(
+          ["editor", "reviewer", "viewer"].includes(role),
+          "角色不正确",
+        );
+      }
+      const accessChanged =
+        role !== selected.role || disabledAt !== selected.disabled_at;
+      db.transaction(() => {
+        db.prepare(
+          "UPDATE workspace_users SET username=?,role=?,disabled_at=?,updated_at=? WHERE id=?",
+        ).run(username, role, disabledAt, Date.now(), id);
+        if (selected.role === "owner")
+          db.prepare("UPDATE admin SET username=? WHERE id=1").run(username);
+        if (accessChanged)
+          db.prepare("DELETE FROM sessions WHERE user_id=?").run(id);
+      })();
       return userDTO(
         db.prepare("SELECT * FROM workspace_users WHERE id=?").get(id),
       );
