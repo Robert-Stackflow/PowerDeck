@@ -464,8 +464,18 @@ export function mountPresenter({
         .insertAdjacentHTML(
           "beforeend",
           '<span class="nav-divider room-interaction-divider" aria-hidden="true"></span><div class="room-interaction-control-group" role="group" aria-label="房间互动">' +
-            dockButton("roomPollBtn", "chartNoAxesColumn", "投票") +
-            dockButton("roomRatingBtn", "star", "评分") +
+            dockButton(
+              "roomPollBtn",
+              "chartNoAxesColumn",
+              "投票",
+              'aria-haspopup="dialog" aria-expanded="false"',
+            ) +
+            dockButton(
+              "roomRatingBtn",
+              "star",
+              "评分",
+              'aria-haspopup="dialog" aria-expanded="false"',
+            ) +
             "</div>",
         );
     if (downloadURL)
@@ -494,7 +504,7 @@ export function mountPresenter({
   if (viewerMode) applyRoomFeedPermissions(viewerPermissions);
   if ($("roomPollPanel"))
     $("roomPollPanel").querySelector("[data-close-room-polls]").onclick = () =>
-      ($("roomPollPanel").hidden = true);
+      closeRoomInteractionPopover($("roomPollPanel"));
   const fv = document.createElement("aside");
   fv.id = "figureViewer";
   fv.className = "overlay";
@@ -513,6 +523,7 @@ export function mountPresenter({
     .querySelectorAll(".dialog-close")
     .forEach((b) => (b.innerHTML = ico("close")));
   const panelTimers = new Map();
+  const interactionPopoverTimers = new WeakMap();
   let backdropTimer,
     panelReturn = null,
     figureReturn = null;
@@ -639,14 +650,102 @@ export function mountPresenter({
     );
     if (!drawing && openMenu()) fillMenus();
   }
+  function roomInteractionPopoverOpen() {
+    return [$("roomPollPanel"), $("roomRatingPopover")].some(
+      (popover) => popover && !popover.hidden,
+    );
+  }
+  function positionRoomInteractionPopover(popover, anchor) {
+    if (!popover || popover.hidden || !anchor) return;
+    const anchorRect = anchor.getBoundingClientRect(),
+      panelRect = popover.getBoundingClientRect(),
+      margin = 12,
+      anchorCenter = anchorRect.left + anchorRect.width / 2,
+      left = Math.max(
+        margin,
+        Math.min(
+          anchorCenter - panelRect.width / 2,
+          window.innerWidth - panelRect.width - margin,
+        ),
+      ),
+      arrowLeft = Math.max(
+        26,
+        Math.min(anchorCenter - left, panelRect.width - 26),
+      ),
+      bottom = Math.max(12, window.innerHeight - anchorRect.top + 16),
+      maxHeight = Math.max(220, anchorRect.top - 32);
+    popover.style.left = `${left}px`;
+    popover.style.bottom = `${bottom}px`;
+    popover.style.setProperty("--popover-arrow-left", `${arrowLeft}px`);
+    popover.style.setProperty("--popover-max-height", `${maxHeight}px`);
+  }
+  function positionOpenRoomInteractionPopovers() {
+    positionRoomInteractionPopover($("roomPollPanel"), $("roomPollBtn"));
+    positionRoomInteractionPopover($("roomRatingPopover"), $("roomRatingBtn"));
+  }
+  function syncRoomInteractionDock() {
+    $("roomPollBtn")?.setAttribute(
+      "aria-expanded",
+      String(!!$("roomPollPanel") && !$("roomPollPanel").hidden),
+    );
+    $("roomRatingBtn")?.setAttribute(
+      "aria-expanded",
+      String(!!$("roomRatingPopover") && !$("roomRatingPopover").hidden),
+    );
+    document.body.classList.toggle(
+      "interaction-popover-open",
+      roomInteractionPopoverOpen(),
+    );
+    if (roomInteractionPopoverOpen()) {
+      clearTimeout(hideTimer);
+      document.body.classList.add("dock-visible");
+    }
+  }
+  function closeRoomInteractionPopover(popover, immediate = false) {
+    if (!popover || popover.hidden) return;
+    clearTimeout(interactionPopoverTimers.get(popover));
+    if (immediate || reduceMotion()) {
+      popover.hidden = true;
+      popover.classList.remove("is-closing");
+      syncRoomInteractionDock();
+      return;
+    }
+    popover.classList.add("is-closing");
+    interactionPopoverTimers.set(
+      popover,
+      hostWindow.setTimeout(() => {
+        popover.hidden = true;
+        popover.classList.remove("is-closing");
+        syncRoomInteractionDock();
+        showDock(3000);
+      }, 160),
+    );
+  }
+  function openRoomInteractionPopover(popover, anchor) {
+    if (!popover || !anchor) return;
+    clearTimeout(interactionPopoverTimers.get(popover));
+    popover.classList.remove("is-closing");
+    popover.hidden = false;
+    syncRoomInteractionDock();
+    positionRoomInteractionPopover(popover, anchor);
+    requestAnimationFrame(() =>
+      positionRoomInteractionPopover(popover, anchor),
+    );
+    hostWindow.setTimeout(
+      () => positionRoomInteractionPopover(popover, anchor),
+      220,
+    );
+  }
   function showDock(delay = 1500) {
     if (openMenu()?.id === "contextMenu" || panelOpen()) return;
     document.body.classList.add("dock-visible");
     clearTimeout(hideTimer);
+    if (roomInteractionPopoverOpen()) return;
     hideTimer = setTimeout(hideDock, delay);
   }
   function hideDock() {
     if (
+      roomInteractionPopoverOpen() ||
       (openMenu() && openMenu().id !== "contextMenu") ||
       dockPressed ||
       (hoverPointer.matches && dock.matches(":hover")) ||
@@ -754,8 +853,8 @@ export function mountPresenter({
     if (id === "notes") renderNotes();
     finishDraw();
     closeMenus();
-    if ($("roomPollPanel")) $("roomPollPanel").hidden = true;
-    if ($("roomRatingPopover")) $("roomRatingPopover").hidden = true;
+    closeRoomInteractionPopover($("roomPollPanel"), true);
+    closeRoomInteractionPopover($("roomRatingPopover"), true);
     hideCursors();
     panelReturn = document.activeElement;
     closePanels(true);
@@ -1308,8 +1407,8 @@ export function mountPresenter({
       ...(feed.polls !== undefined ? { polls: feed.polls } : {}),
     };
     const polls = feed.polls || (feed.poll ? [feed.poll] : []),
-      comments = (feed.comments || []).slice(0, 7).reverse(),
-      activities = roomActivities.slice(-6),
+      comments = (feed.comments || []).slice(0, 24).reverse(),
+      activities = roomActivities.slice(-12),
       signature = JSON.stringify({
         polls: polls.map((poll) => [poll.id, poll.status, poll.votes]),
         comments: comments.map((item) => [item.id, item.body, item.authorRole]),
@@ -1318,7 +1417,9 @@ export function mountPresenter({
     updateRoomPollBadge(polls);
     if (!list) return;
     if (signature === roomFeedSignature) return;
-    const hadFeed = !!roomFeedSignature;
+    const hadFeed = !!roomFeedSignature,
+      stickToBottom =
+        !hadFeed || list.scrollHeight - list.scrollTop - list.clientHeight < 36;
     roomFeedSignature = signature;
     const existing = new Map(
         [...list.children].map((node) => [node.dataset.feedKey, node]),
@@ -1348,7 +1449,7 @@ export function mountPresenter({
           (left.value.at || left.value.createdAt || 0) -
           (right.value.at || right.value.createdAt || 0),
       )
-      .slice(-9);
+      .slice(-30);
     for (const entry of stream) {
       if (entry.type === "activity") {
         const activity = entry.value;
@@ -1397,6 +1498,10 @@ export function mountPresenter({
     if (!nodes.length)
       nodes.push(reuse("empty", "p", "", "互动内容会显示在这里"));
     list.replaceChildren(...nodes);
+    if (stickToBottom)
+      requestAnimationFrame(() => {
+        list.scrollTop = list.scrollHeight;
+      });
     if ($("roomPollPanel") && !$("roomPollPanel").hidden)
       renderRoomPollDialog();
   }
@@ -1939,14 +2044,16 @@ export function mountPresenter({
                 : poll.status === "closed"
                   ? "该投票已结束"
                   : "点击任意选项即可提交";
-        return `<article class="room-poll-card ${poll.status === "open" ? "is-open" : "is-closed"}"><header><div class="room-poll-meta"><span>${poll.status === "open" ? "正在投票" : "已结束"}</span><small>${total} 人参与</small></div><h3>${escapeHTML(poll.question)}</h3></header><div class="room-poll-card-options">${poll.options
+        return `<article class="room-poll-card ${poll.status === "open" ? "is-open" : "is-closed"}"><div class="room-poll-card-top"><span class="room-poll-state">${poll.status === "open" ? "正在投票" : "已结束"}</span><span class="room-poll-participants">${total} 人参与</span></div><h3 class="room-poll-question">${escapeHTML(poll.question)}</h3><div class="room-poll-card-options">${poll.options
           .map((option, index) => {
             const percent = total
               ? Math.round((option.count / total) * 100)
               : 0;
             return `<button type="button" data-instant-room-vote="${index}" data-poll-id="${poll.id}" ${showResults ? "disabled" : ""}>${showResults ? `<i style="width:${percent}%"></i>` : ""}<span>${escapeHTML(option.label)}</span>${showResults ? `<b>${percent}%</b>` : "<em></em>"}</button>`;
           })
-          .join("")}</div><footer>${escapeHTML(statusText)}</footer></article>`;
+          .join(
+            "",
+          )}</div><p class="room-poll-hint">${escapeHTML(statusText)}</p></article>`;
       },
       sections = [
         ["待参与", polls.filter((poll) => poll.status === "open")],
@@ -2000,7 +2107,7 @@ export function mountPresenter({
       )
       .join("")}</div><p>${escapeHTML(message || "点击分数即可提交")}</p>`;
     body.querySelector("[data-close-rating]").onclick = () => {
-      body.hidden = true;
+      closeRoomInteractionPopover(body);
     };
     body.querySelectorAll("[data-room-rating]").forEach(
       (button) =>
@@ -2019,7 +2126,7 @@ export function mountPresenter({
               String(value),
             );
             renderRoomRatingDialog(`已提交 ${value} 分评价`);
-            hostWindow.setTimeout(() => (body.hidden = true), 900);
+            hostWindow.setTimeout(() => closeRoomInteractionPopover(body), 900);
           } catch (error) {
             renderRoomRatingDialog(error.message);
           }
@@ -2030,17 +2137,24 @@ export function mountPresenter({
     if (mode === "rating") {
       const popover = $("roomRatingPopover"),
         opening = popover.hidden;
-      if ($("roomPollPanel")) $("roomPollPanel").hidden = true;
-      popover.hidden = !opening;
-      if (opening) renderRoomRatingDialog();
+      closeRoomInteractionPopover($("roomPollPanel"), true);
+      if (!opening) {
+        closeRoomInteractionPopover(popover);
+        return;
+      }
+      renderRoomRatingDialog();
+      openRoomInteractionPopover(popover, $("roomRatingBtn"));
       return;
     }
     const panel = $("roomPollPanel");
     if (!panel) return;
     const opening = panel.hidden;
-    panel.hidden = !opening;
-    if (!opening) return;
-    if ($("roomRatingPopover")) $("roomRatingPopover").hidden = true;
+    if (!opening) {
+      closeRoomInteractionPopover(panel);
+      return;
+    }
+    closeRoomInteractionPopover($("roomRatingPopover"), true);
+    openRoomInteractionPopover(panel, $("roomPollBtn"));
     const body = $("roomPollBody");
     body.innerHTML = '<div class="session-loading">正在加载投票…</div>';
     try {
@@ -2089,8 +2203,18 @@ export function mountPresenter({
       dockTools.insertAdjacentHTML(
         "beforeend",
         '<span class="nav-divider room-interaction-divider" aria-hidden="true"></span><div class="room-interaction-control-group" role="group" aria-label="房间互动">' +
-          dockButton("roomPollBtn", "chartNoAxesColumn", "投票") +
-          dockButton("roomRatingBtn", "star", "评分") +
+          dockButton(
+            "roomPollBtn",
+            "chartNoAxesColumn",
+            "投票",
+            'aria-haspopup="dialog" aria-expanded="false"',
+          ) +
+          dockButton(
+            "roomRatingBtn",
+            "star",
+            "评分",
+            'aria-haspopup="dialog" aria-expanded="false"',
+          ) +
           "</div>",
       );
       $("roomPollBtn").onclick = () => openRoomInteraction("poll");
@@ -2102,10 +2226,10 @@ export function mountPresenter({
     document
       .querySelector(".room-interaction-divider")
       ?.toggleAttribute("hidden", !permissions.interaction);
-    if (!permissions.interaction)
-      for (const id of ["roomPollPanel"]) if ($(id)) $(id).hidden = true;
-    if (!permissions.interaction && $("roomRatingPopover"))
-      $("roomRatingPopover").hidden = true;
+    if (!permissions.interaction) {
+      closeRoomInteractionPopover($("roomPollPanel"), true);
+      closeRoomInteractionPopover($("roomRatingPopover"), true);
+    }
 
     downloadURL = nextRoom.downloadURL || null;
     if (permissions.downloadPdf && downloadURL && !$("roomDownloadBtn")) {
@@ -2384,13 +2508,13 @@ export function mountPresenter({
       !popover.hidden &&
       !event.target.closest("#roomRatingPopover,#roomRatingBtn")
     )
-      popover.hidden = true;
+      closeRoomInteractionPopover(popover);
     if (
       polls &&
       !polls.hidden &&
       !event.target.closest("#roomPollPanel,#roomPollBtn")
     )
-      polls.hidden = true;
+      closeRoomInteractionPopover(polls);
   });
   $("stage").addEventListener("contextmenu", (e) => {
     if (panelOpen() || viewerMode) return;
@@ -2706,11 +2830,11 @@ export function mountPresenter({
     if (e.key === "Escape") {
       e.preventDefault();
       if ($("roomRatingPopover") && !$("roomRatingPopover").hidden) {
-        $("roomRatingPopover").hidden = true;
+        closeRoomInteractionPopover($("roomRatingPopover"));
         return;
       }
       if ($("roomPollPanel") && !$("roomPollPanel").hidden) {
-        $("roomPollPanel").hidden = true;
+        closeRoomInteractionPopover($("roomPollPanel"));
         return;
       }
       if (openMenu()) {
@@ -2903,7 +3027,13 @@ export function mountPresenter({
       showFigure(img);
     }
   });
-  addEventListener("resize", size);
+  addEventListener("resize", () => {
+    size();
+    positionOpenRoomInteractionPopovers();
+  });
+  addEventListener("orientationchange", () =>
+    hostWindow.setTimeout(positionOpenRoomInteractionPopovers, 180),
+  );
   addEventListener("hashchange", () => {
     if (!viewerMode) go(fromHash(), false);
   });

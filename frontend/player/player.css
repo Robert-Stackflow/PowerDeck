@@ -2120,7 +2120,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   left: max(22px, env(safe-area-inset-left));
   bottom: max(18px, env(safe-area-inset-bottom));
   width: min(330px, calc(100vw - 44px));
-  max-height: min(46vh, 480px);
+  max-height: min(52vh, 540px);
   display: flex;
   flex-direction: column-reverse;
   align-items: flex-start;
@@ -2135,6 +2135,10 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .room-feed-expanded {
   width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   opacity: 1;
   transform: translateY(0) scale(1);
   transform-origin: bottom left;
@@ -2316,17 +2320,38 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   line-height: 1.45;
 }
 #roomFeedItems {
-  display: grid;
-  gap: 8px;
-  align-content: end;
-  max-height: min(38vh, 390px);
-  padding: 0;
-  overflow: hidden;
+  width: 100%;
+  min-height: 0;
+  max-height: min(36vh, 360px);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 3px 5px 3px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff36 transparent;
   background: transparent;
+  pointer-events: auto;
+  touch-action: pan-y;
+}
+#roomFeedItems::-webkit-scrollbar {
+  width: 6px;
+}
+#roomFeedItems::-webkit-scrollbar-track {
+  background: transparent;
+}
+#roomFeedItems::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #ffffff38;
+  background-clip: padding-box;
 }
 .room-feed-composer {
   position: relative;
   width: min(100%, 304px);
+  flex: none;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -2431,14 +2456,15 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 #roomFeedItems article,
 .room-feed-poll {
-  width: fit-content;
-  max-width: 100%;
-  padding: 9px 12px;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  padding: 10px 12px;
   border: 1px solid #ffffff12;
-  border-radius: 6px 15px 15px 15px;
-  background: linear-gradient(135deg, #101820d6, #101820a6);
+  border-radius: 13px;
+  background: linear-gradient(135deg, #111b23e8, #111920d1);
   color: inherit;
-  box-shadow: 0 5px 18px #0002;
+  box-shadow: 0 5px 18px #0001;
   backdrop-filter: blur(14px) saturate(1.2);
   animation: room-comment-in 0.22s ease-out both;
 }
@@ -2472,13 +2498,15 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   color: #a9c9e8;
 }
 .room-feed-activity {
-  width: fit-content;
-  display: inline-flex;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: #0b12179c;
+  padding: 7px 10px;
+  border-left: 2px solid #72cda675;
+  border-radius: 5px 11px 11px 5px;
+  background: #0d151bb5;
   color: #aebbb5;
   backdrop-filter: blur(12px);
   font-size: 10px;
@@ -2501,7 +2529,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .room-feed-poll {
   display: grid;
-  width: min(100%, 340px);
+  width: 100%;
   gap: 5px;
   text-align: left;
   pointer-events: auto;
@@ -2618,34 +2646,63 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .room-poll-popover {
   position: fixed;
   z-index: 54;
-  left: 50%;
+  left: 12px;
   bottom: calc(86px + env(safe-area-inset-bottom));
-  width: min(640px, calc(100vw - 36px));
-  max-height: min(74dvh, 700px);
+  width: min(580px, calc(100vw - 24px));
+  max-height: min(var(--popover-max-height, 72dvh), 680px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  box-sizing: border-box;
+  overflow: visible;
   border: 1px solid #ffffff1d;
-  border-radius: 22px;
-  background: #101820f2;
+  border-radius: 20px;
+  background: #111a22f5;
   color: #eef5f1;
-  box-shadow: 0 22px 68px #0007;
+  box-shadow:
+    0 24px 72px #0008,
+    inset 0 1px #ffffff09;
   backdrop-filter: blur(26px) saturate(1.25);
-  transform: translateX(-50%);
-  animation: room-comment-in 0.18s ease-out both;
+  transform-origin: var(--popover-arrow-left, 50%) calc(100% + 10px);
+  animation: room-popover-enter 0.24s cubic-bezier(0.2, 0.82, 0.25, 1) both;
+}
+.room-poll-popover::after,
+.room-rating-popover::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  bottom: -8px;
+  left: calc(var(--popover-arrow-left, 50%) - 8px);
+  width: 16px;
+  height: 16px;
+  border-right: 1px solid #ffffff1d;
+  border-bottom: 1px solid #ffffff1d;
+  background: #111a22f5;
+  transform: rotate(45deg);
+}
+.room-poll-popover-head,
+#roomPollBody,
+.room-rating-popover > * {
+  position: relative;
+  z-index: 1;
+}
+.room-poll-popover.is-closing,
+.room-rating-popover.is-closing {
+  animation: room-popover-exit 0.15s ease-in both;
+  pointer-events: none;
 }
 .room-poll-popover[hidden] {
   display: none;
 }
 .room-poll-popover-head {
-  min-height: 72px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
   flex: none;
-  padding: 13px 15px 13px 21px;
+  padding: 12px 14px 12px 20px;
   border-bottom: 1px solid #ffffff10;
+  border-radius: 20px 20px 0 0;
 }
 .room-poll-popover-head > div {
   min-width: 0;
@@ -2653,11 +2710,13 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   gap: 4px;
 }
 .room-poll-popover-head b {
-  font-size: 17px;
+  font-size: 16px;
+  line-height: 1.3;
 }
 .room-poll-popover-head span {
   color: #8fa099;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 .room-poll-popover-head button {
   width: 40px;
@@ -2680,44 +2739,57 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   width: 19px;
 }
 #roomPollBody {
+  width: 100%;
   min-width: 0;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: #ffffff2b transparent;
+  border-radius: 0 0 20px 20px;
+}
+#roomPollBody::-webkit-scrollbar {
+  width: 7px;
+}
+#roomPollBody::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #ffffff36;
+  background-clip: padding-box;
 }
 .room-poll-sections {
   min-width: 0;
   display: grid;
-  gap: 20px;
-  padding: 18px;
+  gap: 22px;
+  padding: 18px 20px 20px;
 }
 .room-poll-section {
   min-width: 0;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 .room-poll-section-title {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 3px;
-  color: #b8c6bf;
+  gap: 8px;
+  padding: 0 2px;
+  color: #aab9b2;
 }
 .room-poll-section-title b {
-  font-size: 11px;
-  letter-spacing: 0.02em;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
 }
 .room-poll-section-title span {
-  min-width: 22px;
-  height: 22px;
+  min-width: 20px;
+  height: 20px;
   display: grid;
   place-items: center;
   border-radius: 999px;
   background: #ffffff0c;
   color: #8f9f97;
-  font-size: 9px;
+  font-size: 10px;
 }
 .room-poll-card-list {
   min-width: 0;
@@ -2727,11 +2799,11 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .room-poll-card {
   min-width: 0;
   display: grid;
-  gap: 16px;
-  padding: 20px;
+  gap: 13px;
+  padding: 17px;
   border: 1px solid #ffffff12;
-  border-radius: 17px;
-  background: linear-gradient(145deg, #18242ce8, #131d24e8);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #19252de8, #151f26ee);
   box-shadow: inset 0 1px #ffffff08;
 }
 .room-poll-card.is-open {
@@ -2746,38 +2818,39 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .room-poll-card.is-submitting {
   opacity: 0.62;
 }
-.room-poll-card header {
+.room-poll-card-top {
   min-width: 0;
-  display: grid;
-  gap: 11px;
-}
-.room-poll-card header > div {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
 }
-.room-poll-card header span {
+.room-poll-state {
+  flex: none;
   padding: 4px 9px;
   border-radius: 999px;
   background: #ffffff0c;
   color: #aab8b1;
   font-size: 10px;
+  line-height: 1.25;
 }
-.room-poll-card.is-open header span {
+.room-poll-card.is-open .room-poll-state {
   background: #62c6981b;
   color: #82dab4;
 }
-.room-poll-card header small,
-.room-poll-card footer {
+.room-poll-participants,
+.room-poll-hint {
   color: #819189;
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 1.4;
 }
-.room-poll-card h3 {
+.room-poll-question {
+  min-width: 0;
   margin: 0;
   color: #edf4f0;
-  font-size: 18px;
-  line-height: 1.5;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 .room-poll-card-options {
@@ -2788,12 +2861,12 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .room-poll-card-options button {
   position: relative;
   min-width: 0;
-  min-height: 54px;
+  min-height: 50px;
   display: flex;
   align-items: center;
   gap: 10px;
   overflow: hidden;
-  padding: 0 16px;
+  padding: 10px 14px;
   border: 1px solid #ffffff12;
   border-radius: 13px;
   background: #ffffff07;
@@ -2823,18 +2896,22 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   min-width: 0;
   flex: 1;
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 .room-poll-card-options button b {
   color: #8dd6b6;
   font-size: 12px;
 }
 .room-poll-card-options button em {
-  width: 19px;
-  height: 19px;
+  width: 18px;
+  height: 18px;
   flex: none;
   border: 1px solid #83948c;
   border-radius: 50%;
+}
+.room-poll-hint {
+  margin: -1px 1px 0;
 }
 .room-poll-empty {
   min-height: 220px;
@@ -3084,18 +3161,22 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .room-rating-popover {
   position: fixed;
   z-index: 54;
-  left: 50%;
+  left: 12px;
   bottom: calc(86px + env(safe-area-inset-bottom));
-  width: min(390px, calc(100vw - 28px));
-  padding: 14px;
+  width: min(370px, calc(100vw - 24px));
+  box-sizing: border-box;
+  padding: 16px;
+  overflow: visible;
   border: 1px solid #ffffff24;
-  border-radius: 18px;
-  background: #111b22ed;
+  border-radius: 17px;
+  background: #111a22f5;
   color: #eef5f1;
-  box-shadow: 0 18px 54px #0006;
+  box-shadow:
+    0 22px 64px #0007,
+    inset 0 1px #ffffff09;
   backdrop-filter: blur(24px) saturate(1.25);
-  transform: translateX(-50%);
-  animation: room-comment-in 0.18s ease-out both;
+  transform-origin: var(--popover-arrow-left, 50%) calc(100% + 10px);
+  animation: room-popover-enter 0.24s cubic-bezier(0.2, 0.82, 0.25, 1) both;
 }
 .room-rating-popover[hidden] {
   display: none;
@@ -3104,9 +3185,9 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 13px;
   color: #dce8e2;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
 }
 .room-rating-head button {
@@ -3126,11 +3207,11 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .room-rating-options {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
+  gap: 7px;
 }
 .room-rating-options button {
   min-width: 0;
-  height: 52px;
+  height: 58px;
   display: grid;
   place-items: center;
   gap: 1px;
@@ -3148,18 +3229,38 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   color: #f4c765;
 }
 .room-rating-options svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 .room-rating-options span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 .room-rating-popover > p {
-  margin: 9px 0 0;
+  margin: 11px 0 0;
   color: #82938a;
   text-align: center;
-  font-size: 9px;
+  font-size: 10px;
+}
+@keyframes room-popover-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes room-popover-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.975);
+  }
 }
 .room-poll-badge {
   position: absolute;
@@ -3534,21 +3635,14 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 @media (min-width: 701px) and (max-width: 1200px) and (orientation: landscape) {
   .room-poll-popover {
-    right: max(22px, env(safe-area-inset-right));
-    left: auto;
-    bottom: max(92px, calc(24px + env(safe-area-inset-bottom)));
-    width: min(620px, calc(100vw - 44px));
+    width: min(580px, calc(100vw - 36px));
     max-height: min(72dvh, 660px);
-    transform: none;
   }
 }
 @media (min-width: 701px) and (max-width: 1100px) and (orientation: portrait) {
   .room-poll-popover {
-    right: 20px;
-    left: 20px;
-    width: auto;
+    width: min(560px, calc(100vw - 32px));
     max-height: min(70dvh, 720px);
-    transform: none;
   }
 }
 @media (max-width: 700px) {
