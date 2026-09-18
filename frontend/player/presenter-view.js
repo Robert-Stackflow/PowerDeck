@@ -1,4 +1,4 @@
-import { api, esc, setSession } from "../api.js";
+import { api, setSession } from "../api.js";
 import { icon } from "../icons.js";
 import { wheelNavigation } from "../components/wheel-navigation.js";
 
@@ -40,15 +40,10 @@ try {
   pageStats[current - 1].visits = 1;
   const channel = new BroadcastChannel(`powerdeck-presenter:${id}`);
   document.title = `${deck.title} · 演讲者视图`;
-  root.innerHTML = `<header class="presenter-topbar"><div class="presenter-title"><h1></h1><p>演讲者视图</p></div><div id="connectionStatus" class="presenter-status"><i></i><span>等待演示窗口</span></div><button id="audienceButton" class="topbar-action" type="button">${icon("messageSquare")}观众互动</button><button id="remoteControlButton" class="topbar-action" type="button">${icon("smartphone")}手机遥控</button><output id="sessionClock" class="session-clock">00:00</output></header><main class="presenter-main"><section class="presenter-card current-card"><div class="card-heading"><b>当前页面</b><span id="currentTitle"></span></div><div class="slide-frame-wrap"><iframe id="currentFrame" title="当前页面"></iframe></div></section><aside class="presenter-side"><section class="presenter-card next-card"><div class="card-heading"><b>下一页</b><span id="nextTitle"></span></div><div class="slide-frame-wrap"><iframe id="nextFrame" title="下一页"></iframe></div></section><section class="presenter-card notes-card"><div class="card-heading"><b>演讲备注</b><span id="notesPage"></span></div><div id="speakerNotes" class="speaker-notes"></div><div id="speakerRefs" class="speaker-refs" hidden><h3>参考资料</h3><div></div></div></section></aside></main><footer class="presenter-controls"><button id="previousPage" aria-label="上一页">${icon("prev")}上一页</button><div id="presenterCounter" class="presenter-counter"></div><button id="nextPage" class="primary">下一页${icon("next")}</button><button id="openProjection" class="projection-button">${icon("presentation")}打开演示窗口</button><button id="finishRehearsal">${icon("flag")}结束排练</button><button id="timerToggle" class="timer-toggle">${icon("pause")}暂停计时</button><button id="timerReset" class="timer-reset" aria-label="重置计时" title="重置计时">${icon("rotateCcw")}</button></footer><section id="remoteControlPanel" class="presenter-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="presenter-dialog-card remote-control-card"><button class="dialog-dismiss" type="button" aria-label="关闭">${icon("close")}</button><div><p class="dialog-eyebrow">手机遥控器</p><h2 id="remoteControlTitle">扫码连接演讲</h2><p>手机无需登录。扫码后可以切换页面、查看备注和控制计时。</p></div><img id="remoteControlQR" alt="手机遥控器二维码"><div class="remote-control-link"><input id="remoteControlURL" readonly aria-label="遥控器链接"><button id="copyRemoteURL" type="button">${icon("copy")}复制</button></div></div></section><section id="audiencePanel" class="presenter-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="audienceTitle"><div class="presenter-dialog-card audience-card"><button class="dialog-dismiss" type="button" aria-label="关闭">${icon("close")}</button><div><p class="dialog-eyebrow">现场互动</p><h2 id="audienceTitle">观众互动中心</h2><p>观众扫码后可以匿名提问、参与投票和提交评分。</p></div><div id="audienceSetup" class="audience-setup"><button id="startAudience" class="dialog-primary" type="button">开启观众互动</button></div><div id="audienceDashboard" hidden></div></div></section><section id="rehearsalPanel" class="presenter-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="rehearsalTitle"><div class="presenter-dialog-card rehearsal-card"><button class="dialog-dismiss" type="button" aria-label="关闭">${icon("close")}</button><div><p class="dialog-eyebrow">排练报告</p><h2 id="rehearsalTitle">本次演讲复盘</h2></div><div class="rehearsal-summary"></div><div class="rehearsal-table"></div><button id="continueRehearsal" class="dialog-primary" type="button">继续排练</button></div></section>`;
+  root.innerHTML = `<header class="presenter-topbar"><div class="presenter-title"><h1></h1><p>演讲者视图</p></div><div id="connectionStatus" class="presenter-status"><i></i><span>等待演示窗口</span></div><output id="sessionClock" class="session-clock">00:00</output></header><main class="presenter-main"><section class="presenter-card current-card"><div class="card-heading"><b>当前页面</b><span id="currentTitle"></span></div><div class="slide-frame-wrap"><iframe id="currentFrame" title="当前页面"></iframe></div></section><aside class="presenter-side"><section class="presenter-card next-card"><div class="card-heading"><b>下一页</b><span id="nextTitle"></span></div><div class="slide-frame-wrap"><iframe id="nextFrame" title="下一页"></iframe></div></section><section class="presenter-card notes-card"><div class="card-heading"><b>演讲备注</b><span id="notesPage"></span></div><div id="speakerNotes" class="speaker-notes"></div><div id="speakerRefs" class="speaker-refs" hidden><h3>参考资料</h3><div></div></div></section></aside></main><footer class="presenter-controls"><button id="previousPage" aria-label="上一页">${icon("prev")}上一页</button><div id="presenterCounter" class="presenter-counter"></div><button id="nextPage" class="primary">下一页${icon("next")}</button><button id="openProjection" class="projection-button">${icon("presentation")}打开演示窗口</button><button id="finishRehearsal">${icon("flag")}结束排练</button><button id="timerToggle" class="timer-toggle">${icon("pause")}暂停计时</button><button id="timerReset" class="timer-reset" aria-label="重置计时" title="重置计时">${icon("rotateCcw")}</button></footer><section id="rehearsalPanel" class="presenter-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="rehearsalTitle"><div class="presenter-dialog-card rehearsal-card"><button class="dialog-dismiss" type="button" aria-label="关闭">${icon("close")}</button><div><p class="dialog-eyebrow">排练报告</p><h2 id="rehearsalTitle">本次演讲复盘</h2></div><div class="rehearsal-summary"></div><div class="rehearsal-table"></div><button id="continueRehearsal" class="dialog-primary" type="button">继续排练</button></div></section>`;
   root.removeAttribute("aria-busy");
   root.querySelector(".presenter-title h1").textContent = deck.title;
   const $ = (selector) => root.querySelector(selector);
-  let remoteSession = null,
-    audienceSession = null,
-    audienceInterval = 0,
-    lastRemoteCommand = 0,
-    remoteBusy = false;
   const fullscreenButton = document.createElement("button");
   fullscreenButton.id = "presenterFullscreen";
   fullscreenButton.className = "fullscreen-button";
@@ -253,106 +248,6 @@ try {
       if (event.target === panel) closePresenterDialog(panel);
     };
   }
-  try {
-    remoteSession = await api("/presenter-sessions", {
-      method: "POST",
-      body: { deckId: id, page: current },
-    });
-    $("#remoteControlQR").src = remoteSession.qr;
-    $("#remoteControlURL").value = remoteSession.url;
-  } catch {
-    $("#remoteControlButton").disabled = true;
-    $("#remoteControlButton").title = "暂时无法创建遥控会话";
-  }
-  $("#remoteControlButton").onclick = () => {
-    if (remoteSession) $("#remoteControlPanel").hidden = false;
-  };
-  $("#copyRemoteURL").onclick = async () => {
-    await navigator.clipboard.writeText(remoteSession.url);
-    $("#copyRemoteURL").innerHTML = `${icon("check")}已复制`;
-    setTimeout(
-      () => ($("#copyRemoteURL").innerHTML = `${icon("copy")}复制`),
-      1600,
-    );
-  };
-  function renderAudienceDashboard() {
-    if (!audienceSession) return;
-    const panel = $("#audienceDashboard"),
-      poll = audienceSession.poll,
-      feedback = audienceSession.feedback;
-    panel.innerHTML = `<div class="audience-connect"><img src="${esc(audienceSession.qr || panel.querySelector("img")?.src || "")}" alt="观众互动二维码"><div><label>互动地址</label><div class="remote-control-link"><input value="${esc(audienceSession.url)}" readonly><button type="button" data-copy-audience>${icon("copy")}复制</button></div><div class="audience-metrics"><span><b>${audienceSession.questionCount}</b> 个问题</span><span><b>${poll?.votes || 0}</b> 人投票</span><span><b>${feedback.count ? feedback.average.toFixed(1) : "—"}</b> 平均评分</span></div></div></div><form id="audiencePollForm" class="audience-poll-form"><label>发起投票<input name="question" maxlength="200" placeholder="输入投票题目" required></label><label>选项（每行一个）<textarea name="options" rows="3" placeholder="选项 A&#10;选项 B" required></textarea></label><button class="dialog-primary" type="submit">${poll?.status === "open" ? "发布新投票" : "发起投票"}</button>${poll?.status === "open" ? '<button type="button" class="audience-close-poll">结束当前投票</button>' : ""}</form>${poll ? `<section class="audience-live-poll"><h3>${esc(poll.question)}</h3>${poll.options.map((option) => `<div><span>${esc(option.label)}</span><b>${option.count}</b></div>`).join("")}</section>` : ""}<section class="audience-questions"><h3>观众问题</h3>${audienceSession.questions.length ? audienceSession.questions.map((question) => `<button type="button" data-question="${question.id}" class="${question.answered ? "answered" : ""}"><span><b>${esc(question.name)}</b>${esc(question.body)}</span>${question.answered ? icon("check") : "标记已回答"}</button>`).join("") : '<p class="empty">还没有收到问题</p>'}</section>`;
-    panel.querySelector("[data-copy-audience]").onclick = async () => {
-      await navigator.clipboard.writeText(audienceSession.url);
-    };
-    panel.querySelector("#audiencePollForm").onsubmit = async (event) => {
-      event.preventDefault();
-      const form = new FormData(event.currentTarget);
-      audienceSession = await api(
-        `/audience-sessions/${audienceSession.token}/polls`,
-        {
-          method: "POST",
-          body: {
-            question: form.get("question"),
-            options: String(form.get("options"))
-              .split("\n")
-              .map((value) => value.trim())
-              .filter(Boolean),
-          },
-        },
-      );
-      renderAudienceDashboard();
-    };
-    panel
-      .querySelector(".audience-close-poll")
-      ?.addEventListener("click", async () => {
-        audienceSession = await api(
-          `/audience-sessions/${audienceSession.token}/polls/close`,
-          { method: "POST", body: {} },
-        );
-        renderAudienceDashboard();
-      });
-    panel.querySelectorAll("[data-question]").forEach(
-      (button) =>
-        (button.onclick = async () => {
-          audienceSession = await api(
-            `/audience-sessions/${audienceSession.token}/questions/${button.dataset.question}`,
-            {
-              method: "PATCH",
-              body: { answered: !button.classList.contains("answered") },
-            },
-          );
-          renderAudienceDashboard();
-        }),
-    );
-  }
-  $("#audienceButton").onclick = () => {
-    $("#audiencePanel").hidden = false;
-  };
-  $("#startAudience").onclick = async () => {
-    const button = $("#startAudience");
-    button.disabled = true;
-    try {
-      audienceSession = await api("/audience-sessions", {
-        method: "POST",
-        body: { deckId: id },
-      });
-      $("#audienceSetup").hidden = true;
-      $("#audienceDashboard").hidden = false;
-      renderAudienceDashboard();
-      audienceInterval = setInterval(async () => {
-        if (!audienceSession || $("#audiencePanel").hidden) return;
-        try {
-          const next = await api(`/audience-sessions/${audienceSession.token}`);
-          next.qr = audienceSession.qr;
-          audienceSession = next;
-          renderAudienceDashboard();
-        } catch {}
-      }, 1800);
-    } catch (error) {
-      button.disabled = false;
-      button.textContent = error.message;
-    }
-  };
   async function toggleFullscreen() {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -462,48 +357,10 @@ try {
       updateConnection();
     }
   }, 250);
-  const remoteInterval = setInterval(async () => {
-    if (!remoteSession || remoteBusy) return;
-    remoteBusy = true;
-    try {
-      const elapsed =
-        accumulated + (running ? performance.now() - startedAt : 0);
-      await api(`/presenter-sessions/${remoteSession.token}`, {
-        method: "PATCH",
-        body: { page: current, running, elapsed },
-      });
-      const result = await api(
-        `/remote/${remoteSession.token}/commands?after=${lastRemoteCommand}`,
-      );
-      for (const command of result.commands) {
-        lastRemoteCommand = Math.max(lastRemoteCommand, command.id);
-        if (command.action === "previous") go(current - 1);
-        if (command.action === "next") go(current + 1);
-        if (command.action === "go") go(command.page);
-        if (command.action === "toggleTimer") toggleTimer();
-        if (command.action === "resetTimer") resetTimer();
-      }
-    } catch {}
-    remoteBusy = false;
-  }, 600);
   addEventListener("beforeunload", () => {
     cancelAnimationFrame(stateFrame);
     previewObserver.disconnect();
     channel.close();
-    clearInterval(remoteInterval);
-    clearInterval(audienceInterval);
-    if (remoteSession)
-      fetch(`/api/presenter-sessions/${remoteSession.token}`, {
-        method: "DELETE",
-        headers: { "X-CSRF-Token": session.csrf },
-        keepalive: true,
-      }).catch(() => {});
-    if (audienceSession)
-      fetch(`/api/audience-sessions/${audienceSession.token}`, {
-        method: "DELETE",
-        headers: { "X-CSRF-Token": session.csrf },
-        keepalive: true,
-      }).catch(() => {});
   });
   render();
   requestAnimationFrame(sizePreviewFrames);

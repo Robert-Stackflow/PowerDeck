@@ -239,7 +239,7 @@ function shell() {
     )
     .join(
       "",
-    )}</nav><div class="account"><button id="accountSettings" class="account-name" aria-label="账号设置"><span class="avatar">${esc(session.username[0].toUpperCase())}</span><span>${esc(session.username)}<small>${roleLabels[session.role] || "成员"}</small></span></button><button id="logout" class="icon-button" aria-label="退出登录" title="退出登录">${icon("logOut")}</button></div></aside><main class="library"><header class="library-header"><div><p class="eyebrow">我的空间</p><h1>${{ all: "文稿", templates: "模板", trash: "回收站" }[filter]}</h1></div><div class="header-actions">${["reviewer", "viewer"].includes(session.role) ? "" : filter === "trash" ? `<button class="button danger" id="emptyTrashBtn" ${n.trash ? "" : "disabled"}>${icon("trash2")}清空回收站</button>` : `<button class="button" id="importBtn">${icon("upload")}导入</button><button class="button primary" id="newBtn">${icon("plus")}${filter === "templates" ? "新建模板" : "新建文稿"}</button>`}</div></header>${
+    )}</nav><button id="sidebarTheme" class="sidebar-theme" type="button"><span class="sidebar-theme-icon"></span><span class="sidebar-theme-copy"><b></b><small>仅应用到当前设备</small></span></button><div class="account"><button id="accountSettings" class="account-name" aria-label="账号设置"><span class="avatar">${esc(session.username[0].toUpperCase())}</span><span>${esc(session.username)}<small>${roleLabels[session.role] || "成员"}</small></span></button><button id="logout" class="icon-button" aria-label="退出登录" title="退出登录">${icon("logOut")}</button></div></aside><main class="library"><header class="library-header"><div><p class="eyebrow">我的空间</p><h1>${{ all: "文稿", templates: "模板", trash: "回收站" }[filter]}</h1></div><div class="header-actions">${["reviewer", "viewer"].includes(session.role) ? "" : filter === "trash" ? `<button class="button danger" id="emptyTrashBtn" ${n.trash ? "" : "disabled"}>${icon("trash2")}清空回收站</button>` : `<button class="button" id="importBtn">${icon("upload")}导入</button><button class="button primary" id="newBtn">${icon("plus")}${filter === "templates" ? "新建模板" : "新建文稿"}</button>`}</div></header>${
     filter === "trash"
       ? `<div class="trash-kind-tabs" role="tablist" aria-label="回收站内容类型">${[
           ["all", "全部"],
@@ -289,6 +289,33 @@ function shell() {
     account.classList.remove("active");
     account.removeAttribute("aria-current");
   } else app.innerHTML = markup;
+  const themeButton = app.querySelector("#sidebarTheme");
+  if (themeButton) {
+    const paintThemeButton = () => {
+      const dark = document.documentElement.dataset.theme === "dark";
+      themeButton.querySelector(".sidebar-theme-icon").innerHTML = icon(
+        dark ? "sun" : "moon",
+      );
+      themeButton.querySelector("b").textContent = dark
+        ? "切换浅色"
+        : "切换深色";
+      themeButton.setAttribute(
+        "aria-label",
+        dark ? "切换为浅色模式" : "切换为深色模式",
+      );
+      themeButton.setAttribute("aria-pressed", String(dark));
+    };
+    paintThemeButton();
+    themeButton.onclick = () => {
+      const next =
+        document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem("site.theme.override", next);
+      } catch {}
+      window.setAppTheme?.(next);
+      paintThemeButton();
+    };
+  }
   enhanceSelects(app);
   app.querySelectorAll("[data-filter]").forEach(
     (b) =>

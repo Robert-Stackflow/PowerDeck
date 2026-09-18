@@ -86,6 +86,10 @@ try {
             account.authenticated && !shared && !revision
               ? "/presenter/" + encodeURIComponent(meta.slug)
               : null,
+          sessionControls:
+            account.authenticated && !shared && !revision
+              ? { csrf: account.csrf }
+              : null,
           downloadURL:
             shared && meta.allowDownload ? prefix + "/export?format=pdf" : null,
           saveNote:

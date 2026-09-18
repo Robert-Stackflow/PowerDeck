@@ -112,6 +112,12 @@ export function mountTimer({
     paint();
     save();
   };
+  const resetTiming = () => {
+    disarmReset();
+    timing.reset();
+    save();
+    paint();
+  };
   widget.querySelector("#timerToggle").onclick = toggleTiming;
   widget.querySelector("#timerDetails").onclick = () => {
     openPanel("timingPanel");
@@ -136,10 +142,7 @@ export function mountTimer({
       resetTimeout = setTimeout(disarmReset, 3000);
       return;
     }
-    disarmReset();
-    timing.reset();
-    save();
-    paint();
+    resetTiming();
   };
   const pause = () => {
     timing.pause();
@@ -177,5 +180,8 @@ export function mountTimer({
       paint();
       save();
     },
+    toggle: toggleTiming,
+    reset: resetTiming,
+    snapshot: () => timing.snapshot(),
   };
 }

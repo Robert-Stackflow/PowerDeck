@@ -30,6 +30,7 @@ const names = {
   edit: "Pencil",
   presenter: "Monitor",
   smartphone: "Smartphone",
+  audience: "MessageSquare",
   flag: "Flag",
 };
 const escape = (s) =>

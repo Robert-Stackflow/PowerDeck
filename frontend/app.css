@@ -206,13 +206,64 @@ p {
   opacity: 0.7;
 }
 .account {
-  margin-top: auto;
+  margin-top: 8px;
   border-top: 1px solid var(--line);
   padding: 21px 0 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+.sidebar-theme {
+  width: 100%;
+  margin-top: auto;
+  min-height: 52px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+  color: var(--secondary);
+  text-align: left;
+  transition:
+    background 0.16s,
+    border-color 0.16s,
+    color 0.16s;
+}
+.sidebar-theme:hover {
+  background: var(--hover);
+  border-color: var(--border-hover);
+  color: var(--ink);
+}
+.sidebar-theme-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 10px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--accent-ink);
+}
+.sidebar-theme-icon svg {
+  width: 17px;
+  height: 17px;
+}
+.sidebar-theme-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.sidebar-theme-copy b {
+  font-size: 12px;
+  font-weight: 600;
+}
+.sidebar-theme-copy small {
+  color: var(--muted);
+  font-size: 9px;
 }
 .account-name {
   display: flex;
@@ -1442,6 +1493,24 @@ dialog.wide {
     right: 14px;
     padding: 0;
     border: 0;
+  }
+  .sidebar-theme {
+    position: absolute;
+    top: 17px;
+    right: 100px;
+    width: 39px;
+    min-height: 39px;
+    margin: 0;
+    padding: 3px;
+    border: 0;
+    background: transparent;
+  }
+  .sidebar-theme-icon {
+    width: 33px;
+    height: 33px;
+  }
+  .sidebar-theme-copy {
+    display: none;
   }
   .account-name > span:not(.avatar) {
     display: none;

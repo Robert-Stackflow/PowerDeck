@@ -1380,3 +1380,336 @@ body[data-tool="pointer"] #stage [data-editor-href] {
     animation: none;
   }
 }
+
+/* Presentation-session tools live together in the dock and open focused panels. */
+.session-control-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 3px;
+  padding: 2px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 13px;
+  background: rgb(255 255 255 / 5%);
+  flex: none;
+}
+#controls .session-control-group button {
+  width: 39px;
+  min-width: 39px;
+  height: 38px;
+}
+.session-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  padding: max(22px, env(safe-area-inset-top))
+    max(22px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom))
+    max(22px, env(safe-area-inset-left));
+  overflow: auto;
+  color: #20362f;
+  animation: dialog-in 0.22s cubic-bezier(0.18, 0.72, 0.22, 1) both;
+}
+.session-dialog-card {
+  position: relative;
+  width: min(680px, calc(100vw - 44px));
+  max-height: calc(100dvh - 44px);
+  overflow: auto;
+  padding: 30px;
+  border: 1px solid #ffffffb0;
+  border-radius: 22px;
+  background: #fcfaf6;
+  box-shadow:
+    0 26px 90px #0b19294a,
+    0 2px 9px #192a4014;
+  scrollbar-width: thin;
+  scrollbar-color: #aeb9b3 transparent;
+  overscroll-behavior: contain;
+}
+.audience-session-card {
+  width: min(920px, calc(100vw - 44px));
+}
+.session-dialog-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #dce2df;
+  border-radius: 12px;
+  background: #f0f3f1;
+  color: #71817a;
+}
+.session-dialog-close:hover {
+  background: #e4ebe7;
+  color: #254c3e;
+}
+.session-dialog-close svg,
+.session-link svg {
+  width: 17px;
+  height: 17px;
+}
+.session-dialog-copy {
+  padding-right: 48px;
+  margin-bottom: 24px;
+}
+.session-dialog-copy p {
+  margin: 0 0 7px;
+  color: #8b9a94;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+}
+.session-dialog-copy h2 {
+  margin: 0 0 8px;
+  color: #20362f;
+  font-size: 23px;
+  line-height: 1.35;
+}
+.session-dialog-copy span {
+  color: #77877f;
+  font-size: 13px;
+}
+.session-loading,
+.session-error,
+.session-empty {
+  padding: 42px 16px;
+  border: 1px dashed #d7ded9;
+  border-radius: 14px;
+  color: #85928c;
+  text-align: center;
+}
+.session-error {
+  color: #a54d45;
+}
+.session-connect {
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid #dce4df;
+  border-radius: 16px;
+  background: #f5f7f5;
+}
+.session-connect > img {
+  width: 184px;
+  height: 184px;
+  border-radius: 12px;
+  background: white;
+}
+.session-connect label,
+.audience-poll-form label {
+  display: grid;
+  gap: 7px;
+  color: #65766f;
+  font-size: 11px;
+}
+.session-link {
+  display: flex;
+  gap: 8px;
+  margin-top: 7px;
+}
+.session-link input,
+.audience-poll-form input,
+.audience-poll-form textarea {
+  min-width: 0;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d7dfda;
+  border-radius: 10px;
+  outline: none;
+  background: white;
+  color: #294239;
+  font: inherit;
+  font-size: 12px;
+}
+.session-link button,
+.session-primary,
+.audience-close-poll,
+.audience-session-setup button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 1px solid #356b59;
+  border-radius: 10px;
+  background: #356b59;
+  color: white;
+  white-space: nowrap;
+}
+.session-connect small {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 13px;
+  color: #708178;
+  font-size: 11px;
+}
+.session-connect small i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ca579;
+  box-shadow: 0 0 0 4px #4ca5791e;
+}
+.audience-session-setup {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  border: 1px dashed #d7ded9;
+  border-radius: 14px;
+}
+.audience-session-setup button {
+  min-height: 44px;
+  padding: 0 22px;
+}
+.audience-connect {
+  grid-template-columns: 148px minmax(0, 1fr);
+  margin-bottom: 16px;
+}
+.audience-connect > img {
+  width: 148px;
+  height: 148px;
+}
+.audience-metrics {
+  display: flex;
+  gap: 8px;
+  margin-top: 13px;
+}
+.audience-metrics span {
+  flex: 1;
+  padding: 9px;
+  border-radius: 9px;
+  background: white;
+  color: #78877f;
+  font-size: 10px;
+  text-align: center;
+}
+.audience-metrics b {
+  display: block;
+  margin-bottom: 3px;
+  color: #2d5547;
+  font-size: 15px;
+}
+.audience-poll-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #dce4df;
+  border-radius: 14px;
+}
+.audience-poll-form > div {
+  grid-column: 1/-1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.audience-close-poll {
+  border-color: #d1dad5;
+  background: white;
+  color: #60726a;
+}
+.audience-live-poll,
+.audience-questions {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #dce4df;
+  border-radius: 14px;
+}
+.audience-live-poll h3,
+.audience-questions h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.audience-live-poll > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-top: 1px solid #e5eae7;
+}
+.audience-questions {
+  max-height: 260px;
+  overflow: auto;
+}
+.audience-questions > button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 0;
+  border: 0;
+  border-top: 1px solid #e5eae7;
+  background: transparent;
+  color: #557066;
+  text-align: right;
+}
+.audience-questions > button span {
+  display: grid;
+  gap: 4px;
+  color: #263e36;
+  text-align: left;
+}
+.audience-questions > button b {
+  color: #829089;
+  font-size: 10px;
+}
+.audience-questions > button.answered {
+  opacity: 0.55;
+}
+.session-overlay.closing {
+  animation: dialog-out 0.16s ease-in both;
+  pointer-events: none;
+}
+@media (max-width: 700px) {
+  .session-control-group {
+    margin: 0 2px;
+  }
+  #controls .session-control-group button {
+    width: 38px;
+    min-width: 38px;
+  }
+  .session-overlay {
+    padding: max(12px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+  }
+  .session-dialog-card,
+  .audience-session-card {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    padding: 22px 18px;
+    border-radius: 18px;
+  }
+  .session-dialog-close {
+    top: 14px;
+    right: 14px;
+  }
+  .session-connect,
+  .audience-connect {
+    grid-template-columns: 1fr;
+  }
+  .session-connect > img,
+  .audience-connect > img {
+    width: 148px;
+    height: 148px;
+    justify-self: center;
+  }
+  .audience-poll-form {
+    grid-template-columns: 1fr;
+  }
+}
+@media print {
+  .session-overlay {
+    display: none !important;
+  }
+}

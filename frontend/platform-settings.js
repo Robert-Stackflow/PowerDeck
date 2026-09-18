@@ -1,5 +1,6 @@
 import { api, esc, fileBase64, session } from "./api.js";
 import { icon } from "./icons.js";
+import { selectMarkup, enhanceSelects } from "./components/select.js";
 
 const roles = {
   owner: "所有者",
@@ -7,6 +8,11 @@ const roles = {
   reviewer: "审阅者",
   viewer: "查看者",
 };
+const roleOptions = [
+  ["editor", "编辑者"],
+  ["reviewer", "审阅者"],
+  ["viewer", "查看者"],
+];
 const formatSize = (bytes) =>
   bytes >= 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -85,11 +91,15 @@ export async function mountPlatformSettings(
 
   async function renderTeam() {
     const { users } = await api("/workspace-users");
-    teamPanel.innerHTML = `<section class="settings-card"><div class="settings-card-heading">${icon("group")}<div><h2>工作区成员</h2><p>编辑者可管理内容，审阅者与查看者只能浏览。</p></div><button id="addWorkspaceUser" class="button primary">${icon("plus")}添加成员</button></div><div class="workspace-user-list">${users.map((user) => `<article class="workspace-user"><span class="avatar">${esc(user.username[0].toUpperCase())}</span><div><b>${esc(user.username)}</b><small>${roles[user.role]}${user.disabledAt ? " · 已停用" : ""}</small></div>${user.role === "owner" ? '<span class="badge shared">所有者</span>' : `<select data-user-role="${user.id}" aria-label="${esc(user.username)}的角色"><option value="editor" ${user.role === "editor" ? "selected" : ""}>编辑者</option><option value="reviewer" ${user.role === "reviewer" ? "selected" : ""}>审阅者</option><option value="viewer" ${user.role === "viewer" ? "selected" : ""}>查看者</option></select><button type="button" class="button subtle" data-toggle-user="${user.id}" data-disabled="${Boolean(user.disabledAt)}">${user.disabledAt ? "启用" : "停用"}</button><button type="button" class="icon-button danger" data-delete-user="${user.id}" aria-label="删除成员">${icon("trash2")}</button>`}</article>`).join("")}</div></section>`;
+    teamPanel.innerHTML = `<section class="settings-card"><div class="settings-card-heading">${icon("group")}<div><h2>工作区成员</h2><p>编辑者可管理内容，审阅者与查看者只能浏览。</p></div><button id="addWorkspaceUser" class="button primary">${icon("plus")}添加成员</button></div><div class="workspace-user-list">${users.map((user) => `<article class="workspace-user"><span class="avatar">${esc(user.username[0].toUpperCase())}</span><div><b>${esc(user.username)}</b><small>${roles[user.role]}${user.disabledAt ? " · 已停用" : ""}</small></div>${user.role === "owner" ? '<span class="badge shared">所有者</span>' : `${selectMarkup({ id: `workspaceRole-${user.id}`, value: user.role, options: roleOptions, label: `${user.username}的角色` })}<button type="button" class="button subtle" data-toggle-user="${user.id}" data-disabled="${Boolean(user.disabledAt)}">${user.disabledAt ? "启用" : "停用"}</button><button type="button" class="icon-button danger" data-delete-user="${user.id}" aria-label="删除成员">${icon("trash2")}</button>`}</article>`).join("")}</div></section>`;
+    enhanceSelects(teamPanel);
+    teamPanel.querySelectorAll('[id^="workspaceRole-"]').forEach((input) => {
+      input.dataset.userRole = input.id.slice("workspaceRole-".length);
+    });
     teamPanel.querySelector("#addWorkspaceUser").onclick = () =>
       showDialog(
         "添加工作区成员",
-        `<label>账号<input name="username" required maxlength="40" pattern="[a-zA-Z0-9_.\\-]{2,40}" autofocus></label><label>初始密码<input name="password" type="password" required minlength="10" maxlength="128"></label><label>角色<select name="role"><option value="editor">编辑者</option><option value="reviewer">审阅者</option><option value="viewer">查看者</option></select></label>`,
+        `<label>账号<input name="username" required maxlength="40" pattern="[a-zA-Z0-9_.\\-]{2,40}" autofocus></label><label>初始密码<input name="password" type="password" required minlength="10" maxlength="128"></label><label>角色${selectMarkup({ id: "newWorkspaceRole", name: "role", value: "editor", options: roleOptions, label: "成员角色" })}</label>`,
         {
           submit: "添加",
           onSubmit: async (form) => {

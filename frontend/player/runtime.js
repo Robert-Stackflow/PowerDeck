@@ -14,6 +14,7 @@ export function mountPresenter({
   onExit = null,
   editURL = null,
   presenterURL = null,
+  sessionControls = null,
   downloadURL = null,
   saveNote = null,
   syncHash = true,
@@ -98,7 +99,36 @@ export function mountPresenter({
     clickStart = null,
     imageClickTimer,
     dockPressed = false,
-    dockTouch = null;
+    dockTouch = null,
+    remoteSession = null,
+    audienceSession = null,
+    remoteInterval = 0,
+    audienceInterval = 0,
+    lastRemoteCommand = 0,
+    remoteBusy = false;
+  const sessionRequest = async (path, options = {}) => {
+    const response = await hostWindow.fetch("/api" + path, {
+      method: options.method || "GET",
+      credentials: "same-origin",
+      headers: {
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(sessionControls?.csrf
+          ? { "X-CSRF-Token": sessionControls.csrf }
+          : {}),
+      },
+      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+      ...(options.keepalive ? { keepalive: true } : {}),
+    });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(value.error || "请求失败");
+    return value;
+  };
+  const escapeHTML = (value) =>
+    String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
   const presenterChannel =
     presenterURL && typeof hostWindow.BroadcastChannel === "function"
       ? new hostWindow.BroadcastChannel(`powerdeck-presenter:${deckId}`)
@@ -281,7 +311,7 @@ export function mountPresenter({
     dockButton("overviewBtn", "overview", "目录 G") +
     dockButton("notesBtn", "notes", "备注 N") +
     (presenterURL
-      ? dockButton("presenterViewBtn", "presenter", "演讲者视图")
+      ? `<span class="session-control-group" role="group" aria-label="演讲辅助">${dockButton("presenterViewBtn", "presenter", "演讲者视图")}${dockButton("remoteControlBtn", "smartphone", "手机遥控")}${dockButton("audienceBtn", "audience", "观众互动")}</span>`
       : "") +
     (editURL ? dockButton("editBtn", "edit", "编辑当前页") : "") +
     dockButton("fullscreenBtn", "full", "全屏 F") +
@@ -295,7 +325,10 @@ export function mountPresenter({
   const ui = document.createElement("div");
   ui.id = "presenterUI";
   ui.innerHTML =
-    '<button id="dockReveal" aria-label="显示演示工具"></button><div id="toolMenu" class="presenter-menu" role="menu" aria-label="指针与墨迹" hidden></div><div id="contextMenu" class="presenter-menu" role="menu" aria-label="演示菜单" hidden></div><div id="moreMenu" class="presenter-menu" role="menu" aria-label="更多操作" hidden></div><div id="laserDot"></div><div id="eraserCursor"></div>';
+    '<button id="dockReveal" aria-label="显示演示工具"></button><div id="toolMenu" class="presenter-menu" role="menu" aria-label="指针与墨迹" hidden></div><div id="contextMenu" class="presenter-menu" role="menu" aria-label="演示菜单" hidden></div><div id="moreMenu" class="presenter-menu" role="menu" aria-label="更多操作" hidden></div><div id="laserDot"></div><div id="eraserCursor"></div>' +
+    (presenterURL
+      ? `<section id="remoteControlPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="session-dialog-card remote-session-card"><button class="session-dialog-close" type="button" data-close="remoteControlPanel" aria-label="关闭">${ico("close")}</button><div class="session-dialog-copy"><p>手机遥控</p><h2 id="remoteControlTitle">用手机控制当前演示</h2><span>扫码即可切换页面、查看备注和控制计时，无需登录。</span></div><div id="remoteSessionBody" class="session-loading">正在创建遥控会话…</div></div></section><section id="audiencePanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="audienceTitle"><div class="session-dialog-card audience-session-card"><button class="session-dialog-close" type="button" data-close="audiencePanel" aria-label="关闭">${ico("close")}</button><div class="session-dialog-copy"><p>现场互动</p><h2 id="audienceTitle">让观众参与演示</h2><span>观众可匿名提问、参与投票并提交评分。</span></div><div id="audienceSetup" class="audience-session-setup"><button id="startAudience" type="button">开启观众互动</button></div><div id="audienceDashboard" hidden></div></div></section>`
+      : "");
   document.body.append(ui);
   const fv = document.createElement("aside");
   fv.id = "figureViewer";
@@ -323,9 +356,14 @@ export function mountPresenter({
   const hoverPointer = matchMedia("(hover: hover) and (pointer: fine)");
 
   const panelOpen = () =>
-    ["overview", "notes", "figureViewer", "timingPanel"].some(
-      (id) => $(id) && !$(id).hidden,
-    );
+    [
+      "overview",
+      "notes",
+      "figureViewer",
+      "timingPanel",
+      "remoteControlPanel",
+      "audiencePanel",
+    ].some((id) => $(id) && !$(id).hidden);
   const openMenu = () =>
     ["toolMenu", "contextMenu", "moreMenu"].map($).find((e) => !e.hidden);
   const menuRule = '<div class="menu-rule" role="separator"></div>';
@@ -404,6 +442,8 @@ export function mountPresenter({
       row("overview", "目录 / 跳转", "overview", "G") +
       (allowNotes ? row("notes", "备注", "notes", "N") : "") +
       (presenterURL ? row("presenter", "演讲者视图", "presenter", "") : "") +
+      (presenterURL ? row("remote", "手机遥控", "smartphone", "") : "") +
+      (presenterURL ? row("audience", "观众互动", "audience", "") : "") +
       menuRule +
       row("undo", "撤销墨迹", "undo", "⌘Z", !canUndo) +
       row("redo", "重做墨迹", "redo", "⇧⌘Z", !canRedo) +
@@ -507,7 +547,14 @@ export function mountPresenter({
       el.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
   }
   function closePanels(immediate = false) {
-    for (const id of ["overview", "notes", "figureViewer", "timingPanel"]) {
+    for (const id of [
+      "overview",
+      "notes",
+      "figureViewer",
+      "timingPanel",
+      "remoteControlPanel",
+      "audiencePanel",
+    ]) {
       const el = $(id);
       clearTimeout(panelTimers.get(id));
       if (el.hidden) continue;
@@ -568,6 +615,7 @@ export function mountPresenter({
       ? panelReturn
       : $("stage")
     ).focus({ preventScroll: true });
+    hostWindow.setTimeout(() => showDock(4000), reduceMotion() ? 0 : 190);
   }
   function togglePanel(id) {
     if (id === "notes" && !allowNotes) return;
@@ -793,6 +841,150 @@ export function mountPresenter({
     $("stage").focus({ preventScroll: true });
     updateToolCursor();
   }
+  async function copySessionLink(button, value) {
+    try {
+      await hostWindow.navigator.clipboard.writeText(value);
+      const original = button.innerHTML;
+      button.innerHTML = ico("check") + "已复制";
+      hostWindow.setTimeout(() => (button.innerHTML = original), 1500);
+    } catch {
+      toast("复制失败，请手动复制链接");
+    }
+  }
+  function startRemoteSync() {
+    if (remoteInterval) return;
+    remoteInterval = hostWindow.setInterval(async () => {
+      if (!remoteSession || remoteBusy) return;
+      remoteBusy = true;
+      try {
+        const state = timer.snapshot();
+        await sessionRequest(`/presenter-sessions/${remoteSession.token}`, {
+          method: "PATCH",
+          body: {
+            page: current,
+            running: state.running,
+            elapsed: state.total,
+          },
+        });
+        const result = await sessionRequest(
+          `/remote/${remoteSession.token}/commands?after=${lastRemoteCommand}`,
+        );
+        for (const command of result.commands) {
+          lastRemoteCommand = Math.max(lastRemoteCommand, command.id);
+          if (command.action === "previous") go(current - 1);
+          if (command.action === "next") go(current + 1);
+          if (command.action === "go") go(command.page);
+          if (command.action === "toggleTimer") timer.toggle();
+          if (command.action === "resetTimer") timer.reset();
+        }
+      } catch {}
+      remoteBusy = false;
+    }, 650);
+  }
+  async function openRemoteControl() {
+    openPanel("remoteControlPanel");
+    if (remoteSession) return;
+    const body = $("remoteSessionBody");
+    body.className = "session-loading";
+    body.textContent = "正在创建遥控会话…";
+    try {
+      remoteSession = await sessionRequest("/presenter-sessions", {
+        method: "POST",
+        body: { deckId, page: current },
+      });
+      body.className = "session-connect";
+      body.innerHTML = `<img src="${escapeHTML(remoteSession.qr)}" alt="手机遥控二维码"><div><label for="remoteControlURL">遥控地址</label><div class="session-link"><input id="remoteControlURL" value="${escapeHTML(remoteSession.url)}" readonly><button type="button">${ico("check")}复制链接</button></div><small><i></i>会话已连接到当前演示</small></div>`;
+      body.querySelector("button").onclick = (event) =>
+        copySessionLink(event.currentTarget, remoteSession.url);
+      startRemoteSync();
+    } catch (error) {
+      body.className = "session-error";
+      body.textContent = error.message;
+    }
+  }
+  function renderAudienceDashboard() {
+    if (!audienceSession) return;
+    const panel = $("audienceDashboard"),
+      poll = audienceSession.poll,
+      feedback = audienceSession.feedback;
+    panel.innerHTML = `<div class="session-connect audience-connect"><img src="${escapeHTML(audienceSession.qr || panel.querySelector("img")?.src || "")}" alt="观众互动二维码"><div><label>互动地址</label><div class="session-link"><input value="${escapeHTML(audienceSession.url)}" readonly><button type="button" data-copy-audience>${ico("check")}复制链接</button></div><div class="audience-metrics"><span><b>${audienceSession.questionCount}</b> 个问题</span><span><b>${poll?.votes || 0}</b> 人投票</span><span><b>${feedback.count ? feedback.average.toFixed(1) : "—"}</b> 平均评分</span></div></div></div><form id="audiencePollForm" class="audience-poll-form"><label>投票题目<input name="question" maxlength="200" placeholder="例如：下一部分想先听什么？" required></label><label>选项（每行一个）<textarea name="options" rows="3" placeholder="选项 A&#10;选项 B" required></textarea></label><div><button class="session-primary" type="submit">${poll?.status === "open" ? "发布新投票" : "发起投票"}</button>${poll?.status === "open" ? '<button type="button" class="audience-close-poll">结束当前投票</button>' : ""}</div></form>${poll ? `<section class="audience-live-poll"><h3>${escapeHTML(poll.question)}</h3>${poll.options.map((option) => `<div><span>${escapeHTML(option.label)}</span><b>${option.count}</b></div>`).join("")}</section>` : ""}<section class="audience-questions"><h3>观众问题</h3>${audienceSession.questions.length ? audienceSession.questions.map((question) => `<button type="button" data-question="${question.id}" class="${question.answered ? "answered" : ""}"><span><b>${escapeHTML(question.name)}</b>${escapeHTML(question.body)}</span>${question.answered ? ico("check") : "标记已回答"}</button>`).join("") : '<p class="session-empty">还没有收到问题</p>'}</section>`;
+    panel.querySelector("[data-copy-audience]").onclick = (event) =>
+      copySessionLink(event.currentTarget, audienceSession.url);
+    panel.querySelector("#audiencePollForm").onsubmit = async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget),
+        button = event.submitter;
+      button.disabled = true;
+      try {
+        audienceSession = await sessionRequest(
+          `/audience-sessions/${audienceSession.token}/polls`,
+          {
+            method: "POST",
+            body: {
+              question: form.get("question"),
+              options: String(form.get("options"))
+                .split("\n")
+                .map((value) => value.trim())
+                .filter(Boolean),
+            },
+          },
+        );
+        renderAudienceDashboard();
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message);
+      }
+    };
+    panel
+      .querySelector(".audience-close-poll")
+      ?.addEventListener("click", async () => {
+        audienceSession = await sessionRequest(
+          `/audience-sessions/${audienceSession.token}/polls/close`,
+          { method: "POST", body: {} },
+        );
+        renderAudienceDashboard();
+      });
+    panel.querySelectorAll("[data-question]").forEach(
+      (button) =>
+        (button.onclick = async () => {
+          audienceSession = await sessionRequest(
+            `/audience-sessions/${audienceSession.token}/questions/${button.dataset.question}`,
+            {
+              method: "PATCH",
+              body: { answered: !button.classList.contains("answered") },
+            },
+          );
+          renderAudienceDashboard();
+        }),
+    );
+  }
+  async function startAudience() {
+    const button = $("startAudience");
+    button.disabled = true;
+    try {
+      audienceSession = await sessionRequest("/audience-sessions", {
+        method: "POST",
+        body: { deckId },
+      });
+      $("audienceSetup").hidden = true;
+      $("audienceDashboard").hidden = false;
+      renderAudienceDashboard();
+      audienceInterval ||= hostWindow.setInterval(async () => {
+        if (!audienceSession || $("audiencePanel").hidden) return;
+        try {
+          const next = await sessionRequest(
+            `/audience-sessions/${audienceSession.token}`,
+          );
+          next.qr = audienceSession.qr;
+          audienceSession = next;
+          renderAudienceDashboard();
+        } catch {}
+      }, 1800);
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message);
+    }
+  }
   function act(action) {
     if (action.startsWith("tool:")) {
       setTool(action.slice(5));
@@ -821,6 +1013,12 @@ export function mountPresenter({
           `powerdeck-presenter-${deckId}`,
           "popup=yes,width=1440,height=900",
         );
+        break;
+      case "remote":
+        openRemoteControl();
+        break;
+      case "audience":
+        openPanel("audiencePanel");
         break;
       case "full":
         full();
@@ -857,6 +1055,11 @@ export function mountPresenter({
   $("notesBtn").onclick = () => togglePanel("notes");
   if ($("presenterViewBtn"))
     $("presenterViewBtn").onclick = () => act("presenter");
+  if ($("remoteControlBtn"))
+    $("remoteControlBtn").onclick = () => openRemoteControl();
+  if ($("audienceBtn"))
+    $("audienceBtn").onclick = () => openPanel("audiencePanel");
+  if ($("startAudience")) $("startAudience").onclick = startAudience;
   if ($("editBtn"))
     $("editBtn").onclick = () => {
       hostWindow.location.href = editURL + "#" + current;
@@ -1315,7 +1518,14 @@ export function mountPresenter({
       return;
     }
     if (e.key === "Tab" && panelOpen()) {
-      const panel = ["figureViewer", "notes", "overview", "timingPanel"]
+      const panel = [
+        "figureViewer",
+        "notes",
+        "overview",
+        "timingPanel",
+        "remoteControlPanel",
+        "audiencePanel",
+      ]
         .map($)
         .find((el) => !el.hidden && !el.classList.contains("closing"));
       if (panel) {
@@ -1473,6 +1683,18 @@ export function mountPresenter({
       localStorage.setItem(STORE, savedInk());
     } catch {}
     presenterChannel?.close();
+    hostWindow.clearInterval(remoteInterval);
+    hostWindow.clearInterval(audienceInterval);
+    if (remoteSession)
+      sessionRequest(`/presenter-sessions/${remoteSession.token}`, {
+        method: "DELETE",
+        keepalive: true,
+      }).catch(() => {});
+    if (audienceSession)
+      sessionRequest(`/audience-sessions/${audienceSession.token}`, {
+        method: "DELETE",
+        keepalive: true,
+      }).catch(() => {});
   });
   if (!allowNotes) $("notesBtn").hidden = true;
   size();

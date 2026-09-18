@@ -20,7 +20,11 @@ export function setSite(value) {
   document.documentElement.dataset.siteFavicon = site.favicon || "";
   document.documentElement.dataset.toastPosition =
     site.toastPosition || "bottom-center";
-  window.setAppTheme?.(site.theme || "system");
+  let theme = site.theme || "system";
+  try {
+    theme = localStorage.getItem("site.theme.override") || theme;
+  } catch {}
+  window.setAppTheme?.(theme);
   document.title = site.name;
   setFavicon(site.favicon);
 }

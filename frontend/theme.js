@@ -3,7 +3,10 @@
   const media = matchMedia("(prefers-color-scheme: dark)");
   let preference = "system";
   try {
-    preference = localStorage.getItem("site.theme") || "system";
+    preference =
+      localStorage.getItem("site.theme.override") ||
+      localStorage.getItem("site.theme") ||
+      "system";
   } catch {}
   const apply = () => {
     const mode =

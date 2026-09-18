@@ -27,6 +27,18 @@ try {
   await page.locator("input[name=password]").fill("platform-browser-123");
   await page.locator("input[name=confirm]").fill("platform-browser-123");
   await page.getByRole("button", { name: "创建并进入" }).click();
+  const initialTheme = await page.locator("html").getAttribute("data-theme");
+  await page.locator("#sidebarTheme").click();
+  assert.notEqual(
+    await page.locator("html").getAttribute("data-theme"),
+    initialTheme,
+  );
+  const toggledTheme = await page.locator("html").getAttribute("data-theme");
+  await page.reload();
+  assert.equal(
+    await page.locator("html").getAttribute("data-theme"),
+    toggledTheme,
+  );
   await page.locator("#accountSettings").click();
   await page.getByRole("button", { name: /品牌与素材/ }).click();
   await page.locator("#brandKitForm").waitFor();
@@ -48,7 +60,13 @@ try {
     .locator('#dialog input[name="password"]')
     .fill("editor-password-123");
   await page.locator("#dialog button[type=submit]").click();
-  await page.locator(".workspace-user", { hasText: "editor2" }).waitFor();
+  const member = page.locator(".workspace-user", { hasText: "editor2" });
+  await member.waitFor();
+  await member.locator(".custom-select .select-trigger").click();
+  await page.getByRole("option", { name: "查看者" }).click();
+  await page
+    .locator(".workspace-user", { hasText: /editor2.*查看者/s })
+    .waitFor();
 
   await page.getByRole("button", { name: /备份中心/ }).click();
   await page.locator("#createBackup").click();
@@ -61,24 +79,28 @@ try {
   const frame = page.locator("#visualCanvas").contentFrame();
   await frame.locator('[data-editor-element="image"]').last().waitFor();
 
-  const presenter = await page.context().newPage();
-  await presenter.goto(base + "/presenter/areal");
-  await presenter.locator("#audienceButton").click();
-  await presenter.locator("#startAudience").click();
-  await presenter.locator("#audienceDashboard").waitFor();
-  const audienceURL = await presenter
-    .locator("#audienceDashboard .remote-control-link input")
+  const projection = await page.context().newPage();
+  await projection.goto(base + "/present/areal");
+  const player = projection.locator("#playerFrame").contentFrame();
+  await player.locator("#audienceBtn").click();
+  await player.locator("#startAudience").click();
+  await player.locator("#audienceDashboard").waitFor();
+  const audienceURL = await player
+    .locator("#audienceDashboard .session-link input")
     .inputValue();
   const audience = await page.context().newPage();
   await audience.goto(new URL(audienceURL, base).href);
   await audience.locator("#questionForm textarea").fill("测试问题");
   await audience.locator("#questionForm button").click();
-  await presenter.waitForTimeout(2200);
-  await presenter
+  await projection.waitForTimeout(2200);
+  await player
     .locator(".audience-questions", { hasText: "测试问题" })
     .waitFor();
+  await player.locator("[data-close=audiencePanel]").click();
+  await player.locator("#remoteControlBtn").click();
+  await player.locator("#remoteSessionBody.session-connect").waitFor();
   await audience.close();
-  await presenter.close();
+  await projection.close();
   assert.deepEqual(errors, []);
   console.log(
     "PASS brand library, workspace members, backup center and audience UI",
