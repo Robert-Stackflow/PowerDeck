@@ -414,13 +414,19 @@
 }
 .brand-kit-fields {
   display: grid;
-  grid-template-columns: 150px 150px minmax(220px, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   padding: 22px;
 }
 .brand-kit-fields .color-control {
-  height: 42px;
+  height: 46px;
+  padding: 8px 11px;
   font-size: 11px;
+}
+.brand-kit-fields .color-chip {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
 }
 .brand-assets-card {
   margin-top: 16px;
