@@ -18,6 +18,11 @@ import {
 } from "./settings.mjs";
 export const hash = (s) => crypto.createHash("sha256").update(s).digest("hex");
 export const token = () => crypto.randomBytes(32).toString("base64url");
+const normalizeThemeCSS = (css) =>
+  css.replace(
+    /#deck>\.slide\{background:var\(--pd-background\)!important;/g,
+    "#deck>.slide{background-color:var(--pd-background)!important;",
+  );
 export function createStore(dataDir, seedDir) {
   dataDir = path.resolve(dataDir);
   fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -105,7 +110,9 @@ export function createStore(dataDir, seedDir) {
     if (!fs.existsSync(dir)) throw new HttpError(404, "历史版本不存在");
     return {
       html: fs.readFileSync(path.join(dir, "content.html"), "utf8"),
-      css: fs.readFileSync(path.join(dir, "styles.css"), "utf8"),
+      css: normalizeThemeCSS(
+        fs.readFileSync(path.join(dir, "styles.css"), "utf8"),
+      ),
       notes: JSON.parse(fs.readFileSync(path.join(dir, "notes.json"), "utf8")),
     };
   };

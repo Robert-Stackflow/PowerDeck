@@ -868,7 +868,7 @@ export async function createCanvas({
     const font = fonts[theme.font] || fonts.sans,
       marker =
         /\/\* PowerDeck Theme Start \*\/[\s\S]*?\/\* PowerDeck Theme End \*\//,
-      block = `/* PowerDeck Theme Start */\n#deck{--pd-accent:${theme.accent};--pd-text:${theme.text};--pd-background:${theme.background};--pd-font:${font}}\n#deck>.slide{background:var(--pd-background)!important;color:var(--pd-text);font-family:var(--pd-font)!important}\n#deck>.slide :where(h1,h2,h3,h4,h5,h6){color:var(--pd-accent);font-family:var(--pd-font)!important}\n#deck>.slide :where(p,li,blockquote,td,th){font-family:var(--pd-font)!important}\n/* PowerDeck Theme End */`;
+      block = `/* PowerDeck Theme Start */\n#deck{--pd-accent:${theme.accent};--pd-text:${theme.text};--pd-background:${theme.background};--pd-font:${font}}\n#deck>.slide{background-color:var(--pd-background)!important;color:var(--pd-text);font-family:var(--pd-font)!important}\n#deck>.slide :where(h1,h2,h3,h4,h5,h6){color:var(--pd-accent);font-family:var(--pd-font)!important}\n#deck>.slide :where(p,li,blockquote,td,th){font-family:var(--pd-font)!important}\n/* PowerDeck Theme End */`;
     css = marker.test(css) ? css.replace(marker, block) : `${css}\n${block}`;
     const documentStyles = doc.head.querySelector("style");
     if (documentStyles) documentStyles.textContent = baseCSS + "\n" + css;
