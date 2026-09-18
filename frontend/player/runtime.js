@@ -1220,10 +1220,14 @@ export function mountPresenter({
   function updateRoomConnections(connections = []) {
     const list = $("roomDeviceList"),
       count = $("roomDeviceCount"),
-      badge = document.querySelector('[data-room-tab="members"] span');
+      badge = document.querySelector(
+        '[data-room-tab="members"] .room-tab-badge',
+      ),
+      navCount = $("roomNavCount");
     if (list) list.innerHTML = connectionsMarkup(connections);
-    if (count) count.textContent = `${connections.length} 人`;
+    if (count) count.textContent = `${connections.length} 人在线`;
     if (badge) badge.textContent = connections.length;
+    if (navCount) navCount.textContent = connections.length;
     updateRoomPresence(connections.length, roomLatency);
   }
   function updateRoomPresence(count, latency = null) {
@@ -1549,11 +1553,19 @@ export function mountPresenter({
     };
   }
   const roomTabs = [
-    ["settings", "房间设置"],
-    ["members", "成员列表"],
-    ["polls", "投票"],
-    ["comments", "评论"],
-  ];
+      ["settings", "房间设置", "room"],
+      ["members", "成员列表", "users"],
+      ["polls", "投票", "chartNoAxesColumn"],
+      ["comments", "评论", "audience"],
+    ],
+    roomPermissionRows = [
+      ["directory", "查看目录", "浏览演示页面结构", "overview"],
+      ["notes", "查看备注", "阅读当前页面备注", "notes"],
+      ["interaction", "参与互动", "评论、投票与评分", "audience"],
+      ["downloadPdf", "下载 PDF", "保存演示文稿副本", "print"],
+      ["showInteractionFeed", "互动浮层", "在放映页展示实时消息", "flag"],
+      ["showOnlineCount", "在线状态", "显示人数与连接延迟", "users"],
+    ];
   function roomPollMarkup() {
     const polls = audienceSession?.polls || [],
       history = polls.length
@@ -1580,7 +1592,7 @@ export function mountPresenter({
   }
   function roomCommentsMarkup() {
     const comments = audienceSession?.questions || [];
-    return `<section class="room-comments"><div class="question-heading"><div><h3>现场评论</h3><p>评论按发布时间排列</p></div><span>${comments.length}</span></div><div class="room-comment-list">${
+    return `<section class="room-tab-section room-comments"><header class="room-tab-heading"><div><span>互动记录</span><h3>现场评论</h3><p>房主与参与者发布的评论会实时汇总在这里。</p></div><em>${comments.length} 条</em></header><div class="room-comment-list">${
       comments.length
         ? [...comments]
             .map(
@@ -1594,18 +1606,10 @@ export function mountPresenter({
   function renderRoomTab() {
     const panel = $("roomTabPanel");
     if (!panel || !roomSession) return;
-    const permissionRows = [
-      ["directory", "允许查看目录"],
-      ["notes", "允许查看备注"],
-      ["interaction", "允许参与互动"],
-      ["downloadPdf", "允许下载 PDF"],
-      ["showInteractionFeed", "展示沉浸式互动列表"],
-      ["showOnlineCount", "展示在线人数"],
-    ];
     if (roomTab === "settings")
-      panel.innerHTML = `<div class="room-settings-grid"><div class="session-connect room-connect"><div class="session-qr"><button type="button" class="session-qr-frame" aria-label="放大房间二维码"><img src="${escapeHTML(roomSession.qr)}" alt="房间二维码"></button><span>${ico("audience")}扫码加入房间</span></div><div><label>房间地址</label><div class="session-link"><input value="${escapeHTML(roomSession.url)}" readonly><button type="button" data-copy-room>${ico("check")}复制链接</button></div><small><i></i>观众将自动跟随当前页面、光标与批注</small></div></div><section class="room-permissions"><div class="connection-heading"><div><h3>观众权限</h3><p>更改后立即同步到房间</p></div></div><div class="room-permission-grid">${permissionRows.map(([key, label]) => `<label><span>${escapeHTML(label)}</span><input type="checkbox" data-room-permission="${key}" ${roomSession.permissions[key] ? "checked" : ""}><i aria-hidden="true"></i></label>`).join("")}</div></section><section class="room-password-control"><div><h3>房间密码</h3><p>${roomSession.passwordProtected ? "当前已设置密码，保存新密码会要求观众重新加入" : "不设置密码时，填写称呼即可加入"}</p></div><div><input type="password" data-room-password maxlength="128" placeholder="${roomSession.passwordProtected ? "输入新密码，留空可移除" : "可选：设置访问密码"}"><button type="button" data-room-password-save>保存密码</button></div></section></div><div class="room-actions"><button type="button" data-room-end>结束房间</button></div>`;
+      panel.innerHTML = `<div class="room-settings-layout"><section class="room-settings-card room-share-card"><header class="room-card-heading"><div><span>邀请观众</span><h3>分享房间</h3><p>扫码或复制链接即可加入当前演示。</p></div><em class="room-status-chip"><i></i>正在同步</em></header><div class="room-share-content"><div class="session-qr"><button type="button" class="session-qr-frame" aria-label="放大房间二维码"><img src="${escapeHTML(roomSession.qr)}" alt="房间二维码"></button><span>${ico("audience")}扫码加入房间</span></div><div class="room-share-details"><label>房间链接</label><div class="session-link"><input value="${escapeHTML(roomSession.url)}" readonly><button type="button" data-copy-room>${ico("check")}复制</button></div><div class="room-sync-note">${ico("room")}<span><b>实时同步已开启</b><small>页面、光标和批注会发送给参与者</small></span></div></div></div></section><section class="room-settings-card room-permissions-card"><header class="room-card-heading"><div><span>访问控制</span><h3>观众权限</h3><p>调整后立即同步，无需刷新页面。</p></div></header><div class="room-permission-grid">${roomPermissionRows.map(([key, label, description, icon]) => `<label><span class="room-permission-icon">${ico(icon)}</span><span><b>${escapeHTML(label)}</b><small>${escapeHTML(description)}</small></span><input type="checkbox" data-room-permission="${key}" ${roomSession.permissions[key] ? "checked" : ""}><i aria-hidden="true"></i></label>`).join("")}</div></section><section class="room-settings-card room-password-control"><div class="room-card-heading"><div><span>访问安全</span><h3>房间密码</h3><p>${roomSession.passwordProtected ? "当前已设置密码；更新后参与者需要重新验证。" : "不设置密码时，填写称呼即可加入。"}</p></div></div><div class="room-password-form"><input type="password" data-room-password maxlength="128" placeholder="${roomSession.passwordProtected ? "输入新密码，留空可移除" : "可选：设置访问密码"}"><button type="button" data-room-password-save>保存密码</button></div></section><section class="room-danger-zone"><div><h3>结束房间</h3><p>所有参与者将断开连接，本次房间无法继续访问。</p></div><button type="button" data-room-end>结束房间</button></section></div>`;
     else if (roomTab === "members")
-      panel.innerHTML = `<section class="session-connections room-members"><div class="connection-heading"><div><h3>房间成员</h3><p>正在同步观看演示的设备</p></div><span id="roomDeviceCount">${roomSession.connections?.length || 0} 人</span></div><div id="roomDeviceList" class="connection-list">${connectionsMarkup(roomSession.connections)}</div></section>`;
+      panel.innerHTML = `<section class="room-tab-section room-members"><header class="room-tab-heading"><div><span>实时成员</span><h3>房间成员</h3><p>正在同步观看演示的参与者与设备。</p></div><em id="roomDeviceCount">${roomSession.connections?.length || 0} 人在线</em></header><div id="roomDeviceList" class="connection-list">${connectionsMarkup(roomSession.connections)}</div></section>`;
     else if (roomTab === "polls") panel.innerHTML = roomPollMarkup();
     else panel.innerHTML = roomCommentsMarkup();
 
@@ -1739,7 +1743,7 @@ export function mountPresenter({
     if (!roomSession) return;
     const body = $("roomBody");
     body.className = "room-dashboard";
-    body.innerHTML = `<nav class="room-tabs" role="tablist" aria-label="房间管理">${roomTabs.map(([id, label]) => `<button type="button" role="tab" data-room-tab="${id}" aria-selected="${roomTab === id}">${escapeHTML(label)}${id === "members" ? `<span>${roomSession.connections?.length || 0}</span>` : ""}</button>`).join("")}</nav><div id="roomTabPanel" class="room-tab-panel" role="tabpanel"></div>`;
+    body.innerHTML = `<div class="room-dashboard-shell"><aside class="room-dashboard-nav"><div class="room-live-summary"><span><i></i>房间进行中</span><strong><b id="roomNavCount">${roomSession.connections?.length || 0}</b> 人在线</strong><small>页面、光标与批注正在同步</small></div><nav class="room-tabs" role="tablist" aria-label="房间管理">${roomTabs.map(([id, label, icon]) => `<button type="button" role="tab" data-room-tab="${id}" aria-selected="${roomTab === id}"><span class="room-tab-icon">${ico(icon)}</span><span class="room-tab-label">${escapeHTML(label)}</span>${id === "members" ? `<em class="room-tab-badge">${roomSession.connections?.length || 0}</em>` : ""}</button>`).join("")}</nav><p class="room-nav-hint">房间中的更改会实时同步给所有参与者</p></aside><div id="roomTabPanel" class="room-tab-panel" role="tabpanel"></div></div>`;
     body.querySelectorAll("[data-room-tab]").forEach(
       (button) =>
         (button.onclick = () => {
@@ -1758,7 +1762,7 @@ export function mountPresenter({
   function renderRoomSetup() {
     const body = $("roomBody");
     body.className = "room-setup";
-    body.innerHTML = `<form id="roomSetupForm"><div class="room-setup-intro"><span>${ico("room")}</span><div><h3>开启房间</h3><p>开启后，观众会同步看到页面、光标和批注。请确认访问权限后再开启。</p></div></div><div class="room-setup-fields"><label>房间密码（可选）<input name="password" type="password" maxlength="128" placeholder="不填写则无需密码"></label><fieldset><legend>默认开放给观众</legend><label><input type="checkbox" name="directory" checked>目录</label><label><input type="checkbox" name="notes">备注</label><label><input type="checkbox" name="interaction" checked>互动</label><label><input type="checkbox" name="downloadPdf">PDF 下载</label><label><input type="checkbox" name="showInteractionFeed" checked>互动浮层</label><label><input type="checkbox" name="showOnlineCount" checked>在线人数</label></fieldset></div><div class="room-setup-actions"><button type="button" data-close="roomPanel">取消</button><button type="submit" class="session-primary">确认开启房间</button></div></form>`;
+    body.innerHTML = `<form id="roomSetupForm" class="room-setup-shell"><section class="room-setup-hero"><span class="room-setup-symbol">${ico("room")}</span><p class="room-setup-kicker">实时同步放映</p><h3>创建演示房间</h3><p>观众通过链接或二维码加入后，会同步看到当前页面、光标和批注。</p><ul><li>${ico("check")}页面切换即时同步</li><li>${ico("check")}评论、投票与评分集中管理</li><li>${ico("check")}权限可以随时调整</li></ul></section><section class="room-setup-config"><header><div><span>访问配置</span><h3>设置观众可用功能</h3></div><small>开启后仍可修改</small></header><label class="room-setup-password"><span><b>房间密码</b><em>可选</em></span><input name="password" type="password" maxlength="128" placeholder="不填写则无需密码"><small>设置后，观众需要输入密码才能加入。</small></label><fieldset class="room-setup-permission-grid"><legend>默认权限</legend>${roomPermissionRows.map(([key, label, description, icon]) => `<label><input type="checkbox" name="${key}" ${["directory", "interaction", "showInteractionFeed", "showOnlineCount"].includes(key) ? "checked" : ""}><span class="room-setup-option-icon">${ico(icon)}</span><span><b>${escapeHTML(label)}</b><small>${escapeHTML(description)}</small></span><i aria-hidden="true"></i></label>`).join("")}</fieldset><div class="room-setup-actions"><button type="button" data-close="roomPanel">取消</button><button type="submit" class="session-primary">${ico("room")}开启房间</button></div></section></form>`;
     body.querySelector("[data-close]").onclick = () => dismissPanel();
     body.querySelector("form").onsubmit = async (event) => {
       event.preventDefault();
@@ -1766,7 +1770,7 @@ export function mountPresenter({
         values = new FormData(form),
         button = event.submitter;
       button.disabled = true;
-      button.textContent = "正在开启…";
+      button.innerHTML = `${ico("room")}正在开启…`;
       try {
         roomSession = await sessionRequest("/rooms", {
           method: "POST",
@@ -1800,7 +1804,7 @@ export function mountPresenter({
         renderRoom();
       } catch (error) {
         button.disabled = false;
-        button.textContent = "确认开启房间";
+        button.innerHTML = `${ico("room")}开启房间`;
         toast(error.message);
       }
     };
