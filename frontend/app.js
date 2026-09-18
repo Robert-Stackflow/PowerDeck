@@ -365,6 +365,8 @@ export async function versionHistoryDialog(id, onRestored = () => {}) {
     previewPage = 1,
     previewSlides = [],
     requestId = 0;
+  const deckWidth = Number(deck.width) || 1920,
+    deckHeight = Number(deck.height) || 1080;
   const formatDate = (value) =>
     new Intl.DateTimeFormat("zh-CN", {
       dateStyle: "medium",
@@ -383,6 +385,7 @@ export async function versionHistoryDialog(id, onRestored = () => {}) {
     previousButton = modal.querySelector("#revisionPrevious"),
     nextButton = modal.querySelector("#revisionNext"),
     pageLabel = modal.querySelector("#revisionPage");
+  stage.style.setProperty("--revision-aspect", `${deckWidth} / ${deckHeight}`);
   const renderList = () => {
     list.innerHTML = history
       .map(
@@ -436,13 +439,23 @@ export async function versionHistoryDialog(id, onRestored = () => {}) {
     if (!modal.open || activeRequest !== requestId) return;
     frame.onload = () => {
       if (activeRequest !== requestId) return;
+      const previewDeck = frame.contentDocument.querySelector("#deck"),
+        fitPreview = () => {
+          if (!previewDeck) return;
+          const width = frame.contentWindow.innerWidth || frame.clientWidth,
+            height = frame.contentWindow.innerHeight || frame.clientHeight,
+            scale = Math.min(width / deckWidth, height / deckHeight);
+          previewDeck.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        };
       previewSlides = [
         ...frame.contentDocument.querySelectorAll("#deck > .slide"),
       ];
+      fitPreview();
+      frame.contentWindow.addEventListener("resize", fitPreview);
       showPreviewPage(1);
       stage.setAttribute("aria-busy", "false");
     };
-    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><base href="/api/decks/${id}/files/"><style>${content.css}</style><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#e9eeeb}#deck{position:absolute;left:50%;top:50%;width:${deck.width}px;height:${deck.height}px;transform-origin:center;transform:translate(-50%,-50%) scale(min(calc(100vw / ${deck.width}),calc(100vh / ${deck.height})))}#deck>.slide{display:none!important;position:absolute!important;inset:0!important}</style></head><body><div id="deck">${content.html}</div></body></html>`;
+    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><base href="/api/decks/${id}/files/"><style>${content.css}</style><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}#deck{position:absolute;left:50%;top:50%;width:${deckWidth}px;height:${deckHeight}px;transform-origin:center;transform:translate(-50%,-50%) scale(1)}#deck>.slide{display:none!important;position:absolute!important;inset:0!important}</style></head><body><div id="deck">${content.html}</div></body></html>`;
   };
   previousButton.onclick = () => showPreviewPage(previewPage - 1);
   nextButton.onclick = () => showPreviewPage(previewPage + 1);

@@ -158,15 +158,38 @@
   animation: dialog-out 0.16s ease-in both;
   pointer-events: none;
 }
-@media (max-width: 800px) {
+@media (max-width: 860px) {
   #controls {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
     justify-content: center;
-    width: max-content;
+    width: min(620px, calc(100vw - 20px));
+  }
+  #dockTools {
+    order: 2;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+  }
+  #dockTools::-webkit-scrollbar {
+    display: none;
+  }
+  #dockTools > * {
+    flex-shrink: 0;
   }
   #presentationTimer {
     order: -1;
-    flex-basis: 100%;
+    box-sizing: border-box;
+    flex-basis: auto;
+    width: 100%;
     justify-content: center;
     max-width: none;
     margin-bottom: 5px;
@@ -179,21 +202,21 @@
 }
 @media (max-width: 480px) {
   #controls {
-    gap: 1px;
-    padding: 7px;
+    gap: 2px;
+    padding: 8px;
   }
   #controls button {
-    width: 30px;
-    min-width: 30px;
-    height: 38px;
+    width: 38px;
+    min-width: 38px;
+    height: 42px;
   }
   #controls #counter {
-    width: 48px;
-    min-width: 48px;
+    width: 62px;
+    min-width: 62px;
   }
   #controls #inkBtn {
-    width: 34px;
-    min-width: 34px;
+    width: 46px;
+    min-width: 46px;
   }
   #controls .nav-divider {
     width: 5px;
@@ -213,16 +236,7 @@
 }
 @media (max-width: 360px) {
   #controls {
-    gap: 0;
-    padding: 6px;
-  }
-  #controls button {
-    width: 28px;
-    min-width: 28px;
-  }
-  #controls #counter {
-    width: 44px;
-    min-width: 44px;
+    padding: 7px;
   }
   #controls .nav-divider {
     margin: 0;
@@ -250,6 +264,9 @@ body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
   opacity: 1;
   transform: translate(-50%, 0);
   pointer-events: auto;
+  width: max-content;
+  flex-direction: row;
+  align-items: center;
   flex-wrap: nowrap;
   gap: 0;
   padding: 5px 9px;

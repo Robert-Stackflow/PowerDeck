@@ -33,7 +33,8 @@ export async function openEditor(id) {
     active = "html",
     visual = null,
     mode = "visual",
-    visualLoading = false;
+    visualLoading = false,
+    visualContentStale = false;
   const draft = { ...content, notes: JSON.stringify(content.notes, null, 2) };
   document.title = deck.title + " · 编辑";
   setFavicon(deck.favicon || site.favicon);
@@ -272,6 +273,7 @@ export async function openEditor(id) {
         });
         source.value = draft[active] || "";
         await visual.load(restored);
+        visualContentStale = false;
       });
       document
         .querySelector("#dialog")
@@ -285,6 +287,7 @@ export async function openEditor(id) {
   };
   source.oninput = () => {
     draft[active] = source.value;
+    visualContentStale = true;
     mark();
   };
   document.querySelectorAll("[data-tab]").forEach(
@@ -459,8 +462,14 @@ export async function openEditor(id) {
     if (next === mode || visualLoading) return;
     if (next === "source") {
       syncVisual();
+      visualContentStale = false;
       showMode(next);
       if (active !== "assets") source.value = draft[active];
+      return;
+    }
+    if (!visualContentStale) {
+      showMode("visual");
+      requestAnimationFrame(() => visual.fit());
       return;
     }
     setVisualLoading(true);
@@ -472,6 +481,7 @@ export async function openEditor(id) {
         css: draft.css,
         notes: JSON.parse(draft.notes),
       });
+      visualContentStale = false;
       visual.fit();
     } catch (error) {
       // Keep the user's source intact and return to it for correction.
@@ -538,8 +548,11 @@ export async function openEditor(id) {
           css: backup.css,
           notes: backup.notes,
         });
-        if (notes) await visual.load({ ...draft, notes });
-        else {
+        visualContentStale = true;
+        if (notes) {
+          await visual.load({ ...draft, notes });
+          visualContentStale = false;
+        } else {
           await switchMode("source");
           active = "notes";
           source.value = draft.notes;

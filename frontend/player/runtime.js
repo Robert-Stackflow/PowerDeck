@@ -96,7 +96,8 @@ export function mountPresenter({
     touchStart = null,
     clickStart = null,
     imageClickTimer,
-    dockPressed = false;
+    dockPressed = false,
+    dockTouch = null;
   const presenterChannel =
     presenterURL && typeof hostWindow.BroadcastChannel === "function"
       ? new hostWindow.BroadcastChannel(`powerdeck-presenter:${deckId}`)
@@ -261,6 +262,7 @@ export function mountPresenter({
   const dockButton = (id, icon, label, extra = "") =>
     `<button id="${id}" type="button" aria-label="${label}" data-tip="${label}" ${extra}>${ico(icon)}</button>`;
   dock.innerHTML =
+    '<div id="dockTools" class="dock-tools">' +
     dockButton("prev", "prev", "上一页 ←") +
     '<button id="counter" type="button" aria-label="跳转页面" data-tip="跳转页面 G">01 / ' +
     total +
@@ -287,7 +289,8 @@ export function mountPresenter({
       "more",
       "更多",
       'aria-haspopup="menu" aria-expanded="false"',
-    );
+    ) +
+    "</div>";
   const ui = document.createElement("div");
   ui.id = "presenterUI";
   ui.innerHTML =
@@ -818,6 +821,66 @@ export function mountPresenter({
   };
   dock.addEventListener("pointerup", releaseDock, true);
   dock.addEventListener("pointercancel", releaseDock, true);
+  dock.addEventListener(
+    "touchstart",
+    (event) => {
+      const touch = event.touches[0],
+        button = event.target.closest("button");
+      if (!touch || !button || event.touches.length !== 1) return;
+      dockTouch = {
+        id: touch.identifier,
+        button,
+        x: touch.clientX,
+        y: touch.clientY,
+        moved: false,
+      };
+      dockPressed = true;
+      showDock(5000);
+    },
+    { capture: true, passive: true },
+  );
+  dock.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!dockTouch) return;
+      const touch = [...event.touches].find(
+        (item) => item.identifier === dockTouch.id,
+      );
+      if (
+        touch &&
+        Math.hypot(touch.clientX - dockTouch.x, touch.clientY - dockTouch.y) > 9
+      )
+        dockTouch.moved = true;
+    },
+    { capture: true, passive: true },
+  );
+  dock.addEventListener(
+    "touchend",
+    (event) => {
+      const touch = dockTouch;
+      dockTouch = null;
+      releaseDock();
+      if (!touch || touch.moved || touch.button.disabled) return;
+      const ended = [...event.changedTouches].find(
+        (item) => item.identifier === touch.id,
+      );
+      if (!ended) return;
+      const target = document.elementFromPoint(ended.clientX, ended.clientY);
+      if (!touch.button.contains(target)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      touch.button.click();
+    },
+    { capture: true, passive: false },
+  );
+  dock.addEventListener(
+    "touchcancel",
+    () => {
+      dockTouch = null;
+      releaseDock();
+    },
+    { capture: true, passive: true },
+  );
   for (const el of document.querySelectorAll(".presenter-menu")) {
     el.addEventListener("click", (e) => {
       e.stopPropagation();

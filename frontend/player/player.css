@@ -345,6 +345,9 @@
   max-width: calc(100vw - 20px);
   touch-action: manipulation;
 }
+.dock-tools {
+  display: contents;
+}
 body.dock-visible #controls,
 #controls:has(:focus-visible) {
   opacity: 1;
@@ -769,11 +772,6 @@ body[data-tool="pointer"] #stage {
   #controls {
     padding: 8px 9px;
   }
-  #controls #undoBtn,
-  #controls #presenterViewBtn,
-  #controls #editBtn {
-    display: none;
-  }
   #controls button {
     width: 40px;
     min-width: 40px;
@@ -805,25 +803,18 @@ body[data-tool="pointer"] #stage {
     border-radius: 17px;
   }
   #controls button {
-    width: 36px;
-    height: 40px;
-    min-width: 36px;
+    width: 40px;
+    height: 42px;
+    min-width: 40px;
   }
   #controls #counter {
-    width: 60px;
-    min-width: 60px;
-    font-size: 11px;
+    width: 64px;
+    min-width: 64px;
+    font-size: 12px;
   }
   #controls #inkBtn {
-    width: 43px;
-    min-width: 43px;
-  }
-  #controls #notesBtn,
-  #controls #undoBtn,
-  #controls #overviewBtn,
-  #controls #presenterViewBtn,
-  #controls #editBtn {
-    display: none;
+    width: 48px;
+    min-width: 48px;
   }
   #controls .nav-divider {
     width: 7px;
