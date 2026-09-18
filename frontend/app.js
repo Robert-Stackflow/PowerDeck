@@ -156,7 +156,7 @@ function renderRooms() {
   if (!list) return;
   list.innerHTML = rooms.length
     ? rooms.map(roomCardMarkup).join("")
-    : `<div class="empty-state room-empty">${icon("room")}<h2>当前没有进行中的房间</h2><p>从演示页面的 Dock 开启房间后，会显示在这里。</p></div>`;
+    : `<div class="empty-state room-empty">${icon("room")}<h2>当前没有进行中的房间</h2></div>`;
   list.onclick = async (event) => {
     const button = event.target.closest("[data-copy-room]");
     if (!button) return;
