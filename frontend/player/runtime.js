@@ -655,12 +655,19 @@ export function mountPresenter({
       (popover) => popover && !popover.hidden,
     );
   }
+  function roomSideDockActive() {
+    return (
+      viewerMode &&
+      matchMedia("(max-width: 700px) and (orientation: portrait)").matches
+    );
+  }
   function positionRoomInteractionPopover(popover, anchor) {
     if (!popover || popover.hidden || !anchor) return;
     const anchorRect = anchor.getBoundingClientRect(),
       panelRect = popover.getBoundingClientRect(),
-      margin = 12,
+      margin = roomSideDockActive() ? 10 : 12,
       anchorCenter = anchorRect.left + anchorRect.width / 2,
+      anchorMiddle = anchorRect.top + anchorRect.height / 2,
       left = Math.max(
         margin,
         Math.min(
@@ -674,7 +681,33 @@ export function mountPresenter({
       ),
       bottom = Math.max(12, window.innerHeight - anchorRect.top + 16),
       maxHeight = Math.max(220, anchorRect.top - 32);
+    if (roomSideDockActive()) {
+      const sideLeft = Math.max(margin, anchorRect.left - panelRect.width - 14),
+        top = Math.max(
+          margin,
+          Math.min(
+            anchorMiddle - panelRect.height / 2,
+            window.innerHeight - panelRect.height - margin,
+          ),
+        ),
+        arrowTop = Math.max(
+          24,
+          Math.min(anchorMiddle - top, panelRect.height - 24),
+        );
+      popover.classList.add("side-anchored");
+      popover.style.left = `${sideLeft}px`;
+      popover.style.top = `${top}px`;
+      popover.style.bottom = "auto";
+      popover.style.setProperty("--popover-arrow-top", `${arrowTop}px`);
+      popover.style.setProperty(
+        "--popover-max-height",
+        `${Math.max(220, window.innerHeight - margin * 2)}px`,
+      );
+      return;
+    }
+    popover.classList.remove("side-anchored");
     popover.style.left = `${left}px`;
+    popover.style.top = "auto";
     popover.style.bottom = `${bottom}px`;
     popover.style.setProperty("--popover-arrow-left", `${arrowLeft}px`);
     popover.style.setProperty("--popover-max-height", `${maxHeight}px`);
@@ -706,16 +739,17 @@ export function mountPresenter({
     clearTimeout(interactionPopoverTimers.get(popover));
     if (immediate || reduceMotion()) {
       popover.hidden = true;
-      popover.classList.remove("is-closing");
+      popover.classList.remove("is-closing", "is-opening", "is-positioning");
       syncRoomInteractionDock();
       return;
     }
+    popover.classList.remove("is-opening", "is-positioning");
     popover.classList.add("is-closing");
     interactionPopoverTimers.set(
       popover,
       hostWindow.setTimeout(() => {
         popover.hidden = true;
-        popover.classList.remove("is-closing");
+        popover.classList.remove("is-closing", "side-anchored");
         syncRoomInteractionDock();
         showDock(3000);
       }, 160),
@@ -724,16 +758,17 @@ export function mountPresenter({
   function openRoomInteractionPopover(popover, anchor) {
     if (!popover || !anchor) return;
     clearTimeout(interactionPopoverTimers.get(popover));
-    popover.classList.remove("is-closing");
+    popover.classList.remove("is-closing", "is-opening");
+    popover.classList.add("is-positioning");
     popover.hidden = false;
     syncRoomInteractionDock();
     positionRoomInteractionPopover(popover, anchor);
-    requestAnimationFrame(() =>
-      positionRoomInteractionPopover(popover, anchor),
-    );
-    hostWindow.setTimeout(
-      () => positionRoomInteractionPopover(popover, anchor),
-      220,
+    void popover.offsetWidth;
+    popover.classList.remove("is-positioning");
+    popover.classList.add("is-opening");
+    interactionPopoverTimers.set(
+      popover,
+      hostWindow.setTimeout(() => popover.classList.remove("is-opening"), 260),
     );
   }
   function showDock(delay = 1500) {
@@ -1261,7 +1296,10 @@ export function mountPresenter({
         roomSession.permissions.showOnlineCount);
     if (shouldShowFeed && !$("roomLiveFeed"))
       ui.insertAdjacentHTML("beforeend", roomFeedMarkup(true));
-    else if (!shouldShowFeed) $("roomLiveFeed")?.remove();
+    else if (!shouldShowFeed) {
+      $("roomLiveFeed")?.remove();
+      document.body.classList.remove("room-feed-expanded");
+    }
     bindRoomFeedComposer();
     applyRoomFeedPermissions(roomSession.permissions);
     updateRoomPresence(roomSession.connections?.length || 0, roomLatency);
@@ -1280,7 +1318,7 @@ export function mountPresenter({
         roomFeedCollapseTimer = hostWindow.setTimeout(() => {
           const hasDraft = !!String(input.value || "").trim(),
             pickerOpen = picker && !picker.hidden;
-          if (hasDraft || pickerOpen) {
+          if (hasDraft || pickerOpen || roomInteractionPopoverOpen()) {
             scheduleCollapse();
             return;
           }
@@ -1294,6 +1332,10 @@ export function mountPresenter({
     feed.addEventListener("pointerdown", scheduleCollapse);
     feed.addEventListener("focusin", scheduleCollapse);
     input.addEventListener("input", scheduleCollapse);
+    document.body.classList.toggle(
+      "room-feed-expanded",
+      !feed.classList.contains("collapsed"),
+    );
     scheduleCollapse();
     toggle.onclick = () => {
       picker.hidden = !picker.hidden;
@@ -1362,6 +1404,7 @@ export function mountPresenter({
       badge = feed?.querySelector(".room-feed-unread");
     if (!feed || !toggle) return;
     feed.classList.toggle("collapsed", collapsed);
+    document.body.classList.toggle("room-feed-expanded", !collapsed);
     toggle.setAttribute("aria-expanded", String(!collapsed));
     toggle.setAttribute(
       "aria-label",
@@ -2178,14 +2221,27 @@ export function mountPresenter({
       return;
     }
     closeRoomInteractionPopover($("roomRatingPopover"), true);
-    openRoomInteractionPopover(panel, $("roomPollBtn"));
     const body = $("roomPollBody");
-    body.innerHTML = '<div class="session-loading">正在加载投票…</div>';
+    let loadedBeforeOpen = false;
+    if (roomAudienceState) renderRoomPollDialog();
+    else {
+      body.innerHTML = '<div class="session-loading">正在加载投票…</div>';
+      try {
+        roomAudienceState = await roomAudienceRequest();
+        renderRoomPollDialog();
+        loadedBeforeOpen = true;
+      } catch (error) {
+        body.innerHTML = `<div class="native-interaction-empty"><h3>无法加载投票</h3><p>${escapeHTML(error.message)}</p></div>`;
+      }
+    }
+    openRoomInteractionPopover(panel, $("roomPollBtn"));
+    if (!roomAudienceState || loadedBeforeOpen) return;
     try {
       roomAudienceState = await roomAudienceRequest();
       renderRoomPollDialog();
     } catch (error) {
-      body.innerHTML = `<div class="native-interaction-empty"><h3>无法加载投票</h3><p>${escapeHTML(error.message)}</p></div>`;
+      if (!body.children.length)
+        body.innerHTML = `<div class="native-interaction-empty"><h3>无法加载投票</h3><p>${escapeHTML(error.message)}</p></div>`;
     }
   }
   function syncViewerRoomAccess(nextRoom) {
@@ -2274,7 +2330,10 @@ export function mountPresenter({
       bindRoomFeedComposer();
       roomFeedSignature = "";
       renderLiveFeed(roomFeedState || { poll: null, polls: [], comments: [] });
-    } else if (!showFeed) $("roomLiveFeed")?.remove();
+    } else if (!showFeed) {
+      $("roomLiveFeed")?.remove();
+      document.body.classList.remove("room-feed-expanded");
+    }
     applyRoomFeedPermissions(permissions);
   }
   function act(action) {

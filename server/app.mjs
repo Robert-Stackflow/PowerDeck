@@ -510,6 +510,8 @@ export async function createApp({
           throw new HttpError(403, "当前角色仅可查看内容");
         if (pathname === "/api/workspace-users" && method === "GET")
           return json(res, 200, { users: auth.users() });
+        if (pathname === "/api/rooms" && method === "GET")
+          return json(res, 200, { rooms: rooms.list() });
         if (pathname === "/api/workspace-users" && method === "POST")
           return json(
             res,

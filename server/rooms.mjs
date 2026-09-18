@@ -71,6 +71,30 @@ export function createRooms(store, publicURL = "") {
     };
   }
 
+  function list() {
+    const now = Date.now();
+    for (const [roomToken, room] of rooms)
+      if (now - room.touchedAt > MAX_AGE) rooms.delete(roomToken);
+    return [...rooms.values()]
+      .map((room) => ({
+        token: room.token,
+        deckId: room.deckId,
+        title: room.title,
+        url: room.url,
+        page: room.page,
+        total: room.total,
+        permissions: room.permissions,
+        participants: connectionList(room).length,
+        passwordProtected: !!room.password,
+        hostConnected: [...room.clients].some(
+          (client) => client.role === "host",
+        ),
+        createdAt: room.createdAt,
+        updatedAt: room.touchedAt,
+      }))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
   function send(client, message) {
     if (client.ws.readyState === 1) client.ws.send(JSON.stringify(message));
   }
@@ -387,6 +411,7 @@ export function createRooms(store, publicURL = "") {
     requireAdmission,
     publicState,
     adminState,
+    list,
     update,
     remove,
     requireHost,

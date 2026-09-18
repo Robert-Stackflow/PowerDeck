@@ -23,8 +23,10 @@ import { startAuthentication } from "./webauthn/index.js";
 const app = document.querySelector("#app"),
   modal = document.querySelector("#dialog");
 let decks = [],
+  rooms = [],
+  roomRefreshTimer = 0,
   dialogBackdropPress = false,
-  filter = ["all", "templates", "trash"].includes(
+  filter = ["all", "templates", "rooms", "trash"].includes(
     sessionStorage.getItem("librarySection"),
   )
     ? sessionStorage.getItem("librarySection")
@@ -126,8 +128,46 @@ const roleLabels = {
 const counts = () => ({
   all: decks.filter((d) => !d.deletedAt && d.kind !== "template").length,
   templates: decks.filter((d) => !d.deletedAt && d.kind === "template").length,
+  rooms: rooms.length,
   trash: decks.filter((d) => d.deletedAt).length,
 });
+const roomTime = (value) =>
+  new Intl.DateTimeFormat("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+function roomCardMarkup(room) {
+  const deck = decks.find((item) => item.id === room.deckId),
+    permissions = [
+      [room.permissions?.directory, "目录"],
+      [room.permissions?.notes, "备注"],
+      [room.permissions?.interaction, "互动"],
+      [room.permissions?.downloadPdf, "PDF"],
+    ]
+      .filter(([enabled]) => enabled)
+      .map(([, label]) => `<span>${label}</span>`)
+      .join("");
+  return `<article class="room-list-card" data-room-token="${esc(room.token)}"><div class="room-list-status"><i class="${room.hostConnected ? "live" : ""}"></i><span>${room.hostConnected ? "正在放映" : "等待房主重连"}</span>${room.passwordProtected ? `<em>${icon("lockKeyhole")}密码</em>` : ""}</div><div class="room-list-main"><div><h2>${esc(room.title)}</h2><p>${room.participants} 人在线 · 第 ${room.page} / ${room.total} 页</p></div><a class="button subtle" href="${esc(room.url)}" target="_blank" rel="noopener noreferrer">${icon("externalLink")}打开房间</a></div><div class="room-list-meta"><div class="room-permission-tags">${permissions || "<span>仅同步画面</span>"}</div><span>${roomTime(room.createdAt)} 创建</span><span>${roomTime(room.updatedAt)} 活跃</span></div><div class="room-list-link"><code>${esc(room.url)}</code><button type="button" class="icon-button" data-copy-room="${esc(room.url)}" aria-label="复制房间链接" title="复制房间链接">${icon("copy")}</button>${deck ? `<a class="icon-button" href="/edit/${encodeURIComponent(deck.slug)}" aria-label="编辑文稿" title="编辑文稿">${icon("pencil")}</a>` : ""}</div></article>`;
+}
+function renderRooms() {
+  const list = document.querySelector("#roomList");
+  if (!list) return;
+  list.innerHTML = rooms.length
+    ? rooms.map(roomCardMarkup).join("")
+    : `<div class="empty-state room-empty">${icon("room")}<h2>当前没有进行中的房间</h2><p>从演示页面的 Dock 开启房间后，会显示在这里。</p></div>`;
+  list.onclick = async (event) => {
+    const button = event.target.closest("[data-copy-room]");
+    if (!button) return;
+    try {
+      await navigator.clipboard.writeText(button.dataset.copyRoom);
+      toast("房间链接已复制");
+    } catch {
+      toast("无法复制房间链接");
+    }
+  };
+}
 function loginView(status) {
   sessionStorage.removeItem("libraryView");
   const setup = status.setupRequired;
@@ -219,6 +259,8 @@ async function finishLogin(result) {
   };
 }
 function shell() {
+  clearInterval(roomRefreshTimer);
+  roomRefreshTimer = 0;
   sessionStorage.removeItem("libraryView");
   sessionStorage.setItem("librarySection", filter);
   document.title = site.name;
@@ -231,6 +273,7 @@ function shell() {
   const markup = `<aside class="sidebar"><a class="brand" href="/">${brand()}</a><nav aria-label="演示稿分类">${[
     ["all", "library", "文稿"],
     ["templates", "overview", "模板"],
+    ["rooms", "room", "房间"],
     ["trash", "trash2", "回收站"],
   ]
     .map(
@@ -239,7 +282,7 @@ function shell() {
     )
     .join(
       "",
-    )}</nav><div id="sidebarTheme" class="sidebar-theme" role="tablist" aria-label="外观模式"><button type="button" role="tab" data-theme-choice="light" aria-label="浅色模式" title="浅色模式">${icon("sun")}</button><button type="button" role="tab" data-theme-choice="dark" aria-label="深色模式" title="深色模式">${icon("moon")}</button><button type="button" role="tab" data-theme-choice="system" aria-label="跟随设备" title="跟随设备">${icon("monitor")}</button></div><div class="account"><button id="accountSettings" class="account-name" aria-label="账号设置"><span class="avatar">${esc(session.username[0].toUpperCase())}</span><span>${esc(session.username)}<small>${roleLabels[session.role] || "成员"}</small></span></button><button id="logout" class="icon-button" aria-label="退出登录" title="退出登录">${icon("logOut")}</button></div></aside><main class="library"><header class="library-header"><div><p class="eyebrow">我的空间</p><h1>${{ all: "文稿", templates: "模板", trash: "回收站" }[filter]}</h1></div><div class="header-actions">${["reviewer", "viewer"].includes(session.role) ? "" : filter === "trash" ? `<button class="button danger" id="emptyTrashBtn" ${n.trash ? "" : "disabled"}>${icon("trash2")}清空回收站</button>` : `<button class="button" id="importBtn">${icon("upload")}导入</button><button class="button primary" id="newBtn">${icon("plus")}${filter === "templates" ? "新建模板" : "新建文稿"}</button>`}</div></header>${
+    )}</nav><div id="sidebarTheme" class="sidebar-theme" role="tablist" aria-label="外观模式"><button type="button" role="tab" data-theme-choice="light" aria-label="浅色模式" title="浅色模式">${icon("sun")}</button><button type="button" role="tab" data-theme-choice="dark" aria-label="深色模式" title="深色模式">${icon("moon")}</button><button type="button" role="tab" data-theme-choice="system" aria-label="跟随设备" title="跟随设备">${icon("monitor")}</button></div><div class="account"><button id="accountSettings" class="account-name" aria-label="账号设置"><span class="avatar">${esc(session.username[0].toUpperCase())}</span><span>${esc(session.username)}<small>${roleLabels[session.role] || "成员"}</small></span></button><button id="logout" class="icon-button" aria-label="退出登录" title="退出登录">${icon("logOut")}</button></div></aside><main class="library"><header class="library-header"><div><p class="eyebrow">我的空间</p><h1>${{ all: "文稿", templates: "模板", rooms: "房间", trash: "回收站" }[filter]}</h1></div><div class="header-actions">${filter === "rooms" ? `<button class="button subtle" id="refreshRoomsBtn">${icon("rotateCcw")}刷新</button>` : ["reviewer", "viewer"].includes(session.role) ? "" : filter === "trash" ? `<button class="button danger" id="emptyTrashBtn" ${n.trash ? "" : "disabled"}>${icon("trash2")}清空回收站</button>` : `<button class="button" id="importBtn">${icon("upload")}导入</button><button class="button primary" id="newBtn">${icon("plus")}${filter === "templates" ? "新建模板" : "新建文稿"}</button>`}</div></header>${
     filter === "trash"
       ? `<div class="trash-kind-tabs" role="tablist" aria-label="回收站内容类型">${[
           ["all", "全部"],
@@ -252,28 +295,32 @@ function shell() {
           )
           .join("")}</div>`
       : ""
-  }<div class="library-toolbar"><label class="search">${icon("search")}<input id="search" type="search" aria-label="搜索演示稿" placeholder="${filter === "trash" ? "搜索回收站" : filter === "templates" ? "搜索模板" : "搜索文稿"}" value="${esc(query)}"></label>${
-    filter === "all"
-      ? selectMarkup({
-          id: "visibilityFilter",
-          label: "访问权限筛选",
-          value: access,
+  }${
+    filter === "rooms"
+      ? '<div id="roomList" class="room-list"></div>'
+      : `<div class="library-toolbar"><label class="search">${icon("search")}<input id="search" type="search" aria-label="搜索演示稿" placeholder="${filter === "trash" ? "搜索回收站" : filter === "templates" ? "搜索模板" : "搜索文稿"}" value="${esc(query)}"></label>${
+          filter === "all"
+            ? selectMarkup({
+                id: "visibilityFilter",
+                label: "访问权限筛选",
+                value: access,
+                options: [
+                  ["all", "全部"],
+                  ["private", "私有"],
+                  ["shared", "链接分享"],
+                ],
+              })
+            : ""
+        }${selectMarkup({
+          id: "sort",
+          label: "排序",
+          value: sort,
           options: [
-            ["all", "全部"],
-            ["private", "私有"],
-            ["shared", "链接分享"],
+            ["updated", "最近更新"],
+            ["title", "按标题"],
           ],
-        })
-      : ""
-  }${selectMarkup({
-    id: "sort",
-    label: "排序",
-    value: sort,
-    options: [
-      ["updated", "最近更新"],
-      ["title", "按标题"],
-    ],
-  })}</div><div id="deckGrid" class="deck-grid"></div></main>`;
+        })}</div><div id="deckGrid" class="deck-grid"></div>`
+  }</main>`;
   const sidebar = app.querySelector(".sidebar");
   if (sidebar) {
     const template = document.createElement("template");
@@ -342,14 +389,18 @@ function shell() {
         renderCards();
       }),
   );
-  document.querySelector("#search").oninput = (e) => {
-    query = e.target.value;
-    renderCards();
-  };
-  document.querySelector("#sort").onchange = (e) => {
-    sort = e.target.value;
-    renderCards();
-  };
+  const searchInput = document.querySelector("#search"),
+    sortInput = document.querySelector("#sort");
+  if (searchInput)
+    searchInput.oninput = (e) => {
+      query = e.target.value;
+      renderCards();
+    };
+  if (sortInput)
+    sortInput.onchange = (e) => {
+      sort = e.target.value;
+      renderCards();
+    };
   document
     .querySelector("#visibilityFilter")
     ?.addEventListener("change", (e) => {
@@ -366,6 +417,20 @@ function shell() {
   document
     .querySelector("#emptyTrashBtn")
     ?.addEventListener("click", () => emptyTrashDialog(n.trash));
+  document
+    .querySelector("#refreshRoomsBtn")
+    ?.addEventListener("click", async (e) => {
+      const button = e.currentTarget;
+      button.disabled = true;
+      try {
+        rooms = (await api("/rooms")).rooms;
+        renderRooms();
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
   document.querySelector("#logout").onclick = async () => {
     await api("/logout", { method: "POST" });
     setSession({});
@@ -374,7 +439,19 @@ function shell() {
   };
   document.querySelector("#accountSettings").onclick = () =>
     openSettings().catch((e) => toast(e.message));
-  renderCards();
+  if (filter === "rooms") {
+    renderRooms();
+    roomRefreshTimer = window.setInterval(async () => {
+      try {
+        rooms = (await api("/rooms")).rooms;
+        if (filter === "rooms") {
+          const badge = document.querySelector('[data-filter="rooms"] small');
+          if (badge) badge.textContent = rooms.length;
+          renderRooms();
+        }
+      } catch {}
+    }, 5000);
+  } else renderCards();
 }
 function cardMarkup(d) {
   const template = d.kind === "template",
@@ -710,7 +787,10 @@ async function createTemplateDialog() {
   );
 }
 async function refresh() {
-  decks = (await api("/decks")).decks;
+  [decks, rooms] = await Promise.all([
+    api("/decks").then((value) => value.decks),
+    api("/rooms").then((value) => value.rooms),
+  ]);
   shell();
 }
 async function createDialog(selected = "") {
