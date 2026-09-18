@@ -1285,7 +1285,7 @@ export function mountPresenter({
             return;
           }
           setRoomFeedCollapsed(true);
-        }, 9000);
+        }, 3000);
       };
     feedToggle.onclick = () => {
       setRoomFeedCollapsed(!feed.classList.contains("collapsed"));
