@@ -39,7 +39,7 @@ export async function mountVisualEditor({
   initialPage = 1,
 }) {
   const loadingOverlay = root.querySelector(".editor-loading-overlay");
-  root.innerHTML = `<div class="visual-toolbar"><div class="visual-tool-group">${tool("visualUndo", "undo", "撤销")}${tool("visualRedo", "redo", "重做")}</div><div class="visual-tool-group"><button class="button subtle" id="insertPage" aria-haspopup="menu" aria-expanded="false">${icon("plus")}新增页面${icon("down")}</button></div><div class="visual-tool-group"><button class="button subtle" id="insertText">${icon("type")}文字</button><button class="button subtle" id="insertImage">${icon("image")}图片</button><button class="button subtle" id="insertShape" aria-haspopup="dialog" aria-expanded="false">${icon("square")}形状${icon("down")}</button><button class="button subtle" id="insertFormula">${icon("sigma")}公式</button><button class="button subtle" id="insertLink" disabled>${icon("link")}链接</button></div><div class="visual-toolbar-end">${tool("snapToggle", "magnet", "对齐辅助线（按住 Alt 暂停吸附）")}</div></div><div class="visual-layout"><aside class="slide-rail"><div id="slideList" class="slide-list" aria-label="幻灯片页面"></div></aside><div class="visual-center"><div class="visual-stage"><iframe id="visualCanvas" title="可视化编辑画布" sandbox="allow-same-origin"></iframe></div></div><aside class="visual-inspector"><div class="inspector-tabs" role="tablist" aria-label="页面侧边栏"><button type="button" id="inspectorPageTab" role="tab" data-inspector-tab="page" aria-selected="true" aria-controls="inspectorPagePanel">页面</button><button type="button" id="inspectorNotesTab" role="tab" data-inspector-tab="notes" aria-selected="false" aria-controls="inspectorNotesPanel">标题与备注</button><button type="button" id="inspectorReferencesTab" role="tab" data-inspector-tab="references" aria-selected="false" aria-controls="inspectorReferencesPanel">引用</button></div><section id="inspectorPagePanel" class="inspector-tab-panel inspector-page-panel" data-inspector-panel="page" role="tabpanel" aria-labelledby="inspectorPageTab"><div id="elementInspector"></div></section><section id="inspectorNotesPanel" class="inspector-tab-panel inspector-notes-panel" data-inspector-panel="notes" role="tabpanel" aria-labelledby="inspectorNotesTab" hidden><div class="visual-notes-field"><div class="inspector-field-heading"><label for="visualPageTitle">页面标题</label><button type="button" id="visualPageCount" aria-label="当前页面"></button></div><input id="visualPageTitle" aria-label="页面标题" maxlength="200" placeholder="输入页面标题" spellcheck="false"><label for="visualPageNotes">页面备注</label><textarea id="visualPageNotes" aria-label="页面备注" placeholder="添加当前页的演讲备注…"></textarea></div></section><section id="inspectorReferencesPanel" class="inspector-tab-panel inspector-references-panel" data-inspector-panel="references" role="tabpanel" aria-labelledby="inspectorReferencesTab" hidden><section class="visual-page-refs" id="visualPageRefs" aria-label="当前页引用"><header><h2>当前页引用</h2><div><button type="button" class="button subtle reference-library-button" id="openReferenceLibrary">资料库</button><button type="button" class="icon-button" id="addReference" aria-label="添加引用" title="添加引用">${icon("plus")}</button></div></header><div id="referenceList"></div></section></section></aside></div><input id="visualImageFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml" hidden><div id="pageInsertPopover" class="editor-popover page-insert-popover" popover="auto" role="menu" aria-label="新增页面"></div><div id="referenceLibraryPopover" class="editor-popover reference-library-popover" popover="auto" role="dialog" aria-label="引用资料库"></div><div id="shapePopover" class="editor-popover shape-popover" popover="auto" role="dialog" aria-label="插入形状"><div class="shape-grid">${shapes.map((shape) => `<button type="button" data-shape="${shape.id}" aria-label="${shape.label}" title="${shape.label}">${icon(shape.icon)}<span>${shape.label}</span></button>`).join("")}</div></div><div id="linkPopover" class="editor-popover link-popover" popover="auto" role="dialog" aria-label="超链接"><form id="editorLinkForm"><div class="link-popover-heading"><h2>超链接</h2>${tool("closeLink", "x", "关闭链接设置")}</div><label>链接地址<input id="editorLinkURL" placeholder="https://" autocomplete="off" spellcheck="false" aria-label="链接地址"></label><p id="editorLinkError" class="form-error" role="alert"></p><div class="link-popover-actions"><button type="button" class="button subtle" id="removeEditorLink">移除链接</button><button type="submit" class="button primary">应用</button></div></form></div>`;
+  root.innerHTML = `<div class="visual-toolbar"><div class="visual-tool-group">${tool("visualUndo", "undo", "撤销")}${tool("visualRedo", "redo", "重做")}</div><div class="visual-tool-group"><button class="button subtle" id="insertPage" aria-haspopup="menu" aria-expanded="false">${icon("plus")}新增页面${icon("down")}</button></div><div class="visual-tool-group"><button class="button subtle" id="insertText">${icon("type")}文字</button><button class="button subtle" id="insertImage">${icon("image")}图片</button><button class="button subtle" id="insertShape" aria-haspopup="dialog" aria-expanded="false">${icon("square")}形状${icon("down")}</button><button class="button subtle" id="insertTable">${icon("table2")}表格</button><button class="button subtle" id="insertChart">${icon("chartNoAxesColumn")}图表</button><button class="button subtle" id="insertMedia">${icon("clapperboard")}音视频</button><button class="button subtle" id="insertFormula">${icon("sigma")}公式</button><button class="button subtle" id="insertLink" disabled>${icon("link")}链接</button></div><div class="visual-toolbar-end">${tool("snapToggle", "magnet", "对齐辅助线（按住 Alt 暂停吸附）")}</div></div><div class="visual-layout"><aside class="slide-rail"><div id="slideList" class="slide-list" aria-label="幻灯片页面"></div></aside><div class="visual-center"><div class="visual-stage"><iframe id="visualCanvas" title="可视化编辑画布" sandbox="allow-same-origin"></iframe></div></div><aside class="visual-inspector"><div class="inspector-tabs" role="tablist" aria-label="页面侧边栏"><button type="button" id="inspectorPageTab" role="tab" data-inspector-tab="page" aria-selected="true" aria-controls="inspectorPagePanel">页面</button><button type="button" id="inspectorNotesTab" role="tab" data-inspector-tab="notes" aria-selected="false" aria-controls="inspectorNotesPanel">标题与备注</button><button type="button" id="inspectorReferencesTab" role="tab" data-inspector-tab="references" aria-selected="false" aria-controls="inspectorReferencesPanel">引用</button></div><section id="inspectorPagePanel" class="inspector-tab-panel inspector-page-panel" data-inspector-panel="page" role="tabpanel" aria-labelledby="inspectorPageTab"><div id="elementInspector"></div></section><section id="inspectorNotesPanel" class="inspector-tab-panel inspector-notes-panel" data-inspector-panel="notes" role="tabpanel" aria-labelledby="inspectorNotesTab" hidden><div class="visual-notes-field"><div class="inspector-field-heading"><label for="visualPageTitle">页面标题</label><button type="button" id="visualPageCount" aria-label="当前页面"></button></div><input id="visualPageTitle" aria-label="页面标题" maxlength="200" placeholder="输入页面标题" spellcheck="false"><label for="visualPageNotes">页面备注</label><textarea id="visualPageNotes" aria-label="页面备注" placeholder="添加当前页的演讲备注…"></textarea></div></section><section id="inspectorReferencesPanel" class="inspector-tab-panel inspector-references-panel" data-inspector-panel="references" role="tabpanel" aria-labelledby="inspectorReferencesTab" hidden><section class="visual-page-refs" id="visualPageRefs" aria-label="当前页引用"><header><h2>当前页引用</h2><div><button type="button" class="button subtle reference-library-button" id="openReferenceLibrary">资料库</button><button type="button" class="icon-button" id="addReference" aria-label="添加引用" title="添加引用">${icon("plus")}</button></div></header><div id="referenceList"></div></section></section></aside></div><input id="visualImageFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml" hidden><input id="visualMediaFile" type="file" accept="video/mp4,video/webm,audio/mpeg,audio/wav,audio/ogg" hidden><div id="pageInsertPopover" class="editor-popover page-insert-popover" popover="auto" role="menu" aria-label="新增页面"></div><div id="referenceLibraryPopover" class="editor-popover reference-library-popover" popover="auto" role="dialog" aria-label="引用资料库"></div><div id="shapePopover" class="editor-popover shape-popover" popover="auto" role="dialog" aria-label="插入形状"><div class="shape-grid">${shapes.map((shape) => `<button type="button" data-shape="${shape.id}" aria-label="${shape.label}" title="${shape.label}">${icon(shape.icon)}<span>${shape.label}</span></button>`).join("")}</div></div><div id="linkPopover" class="editor-popover link-popover" popover="auto" role="dialog" aria-label="超链接"><form id="editorLinkForm"><div class="link-popover-heading"><h2>超链接</h2>${tool("closeLink", "x", "关闭链接设置")}</div><label>链接地址<input id="editorLinkURL" placeholder="https://" autocomplete="off" spellcheck="false" aria-label="链接地址"></label><p id="editorLinkError" class="form-error" role="alert"></p><div class="link-popover-actions"><button type="button" class="button subtle" id="removeEditorLink">移除链接</button><button type="submit" class="button primary">应用</button></div></form></div>`;
   if (loadingOverlay) root.append(loadingOverlay);
   const $ = (selector) => root.querySelector(selector);
   $("#inspectorPageTab").insertAdjacentHTML(
@@ -53,7 +53,19 @@ export async function mountVisualEditor({
   $("#inspectorElementPanel").append($("#elementInspector"));
   $("#inspectorPagePanel").insertAdjacentHTML(
     "beforeend",
-    `<section class="page-transition-settings"><h2>页面切换效果</h2><label>进入方式${selectMarkup(
+    `<section class="deck-theme-settings"><header><h2>母版主题</h2><span>应用到全部页面</span></header><div class="theme-presets"><button type="button" data-theme-preset="classic">经典</button><button type="button" data-theme-preset="midnight">深色</button><button type="button" data-theme-preset="warm">暖色</button><button type="button" data-theme-preset="minimal">极简</button></div><label>全局字体${selectMarkup(
+      {
+        id: "deckThemeFont",
+        value: "sans",
+        label: "全局字体",
+        options: [
+          ["sans", "现代无衬线"],
+          ["serif", "典雅衬线"],
+          ["modern", "简洁现代"],
+          ["rounded", "圆体"],
+        ],
+      },
+    )}</label><div class="theme-color-fields"><label>强调色<input id="deckThemeAccent" type="color" value="#276455"></label><label>文字色<input id="deckThemeText" type="color" value="#243d36"></label><label>背景色<input id="deckThemeBackground" type="color" value="#ffffff"></label></div><button type="button" class="button primary" id="applyDeckTheme">应用主题</button></section><section class="page-transition-settings"><h2>页面切换效果</h2><label>进入方式${selectMarkup(
       {
         id: "pageTransition",
         value: "none",
@@ -463,7 +475,7 @@ export async function mountVisualEditor({
       .reverse()
       .map(
         (layer) =>
-          `<button type="button" class="layer-row ${layer.selected ? "selected" : ""}" data-layer-index="${layer.index}" title="${esc(layer.label)}">${icon(layer.type === "image" || layer.type === "img" ? "image" : layer.type === "shape" ? "square" : "type")}<span>${esc(layer.label)}</span></button>`,
+          `<button type="button" class="layer-row ${layer.selected ? "selected" : ""}" data-layer-index="${layer.index}" title="${esc(layer.label)}">${icon(layer.locked ? "lockKeyhole" : layer.type === "image" || layer.type === "img" ? "image" : layer.type === "shape" || layer.type === "group" ? "square" : "type")}<span>${esc(layer.label)}</span></button>`,
       )
       .join("");
   }
@@ -548,7 +560,7 @@ export async function mountVisualEditor({
     }
     if (info.multi) {
       colors.close();
-      container.innerHTML = `<div class="visual-panel-head"><h2>${esc(info.type)}</h2></div><div class="multi-selection-panel"><p>按住 Shift 可继续选择或取消选择图层。</p><section class="property-section"><h3>对齐所选图层</h3><div class="alignment-actions">${tool("alignSelectionLeft", "alignLeft", "左对齐")}${tool("alignSelectionCenter", "alignCenter", "水平居中")}${tool("alignSelectionRight", "alignRight", "右对齐")}${tool("alignSelectionTop", "arrowUp", "顶部对齐")}${tool("alignSelectionMiddle", "minus", "垂直居中")}${tool("alignSelectionBottom", "arrowDown", "底部对齐")}</div></section><div class="element-actions"><button type="button" class="button" id="duplicateElement">${icon("copy")}复制所选</button><button type="button" class="icon-button danger" id="deleteElement" aria-label="删除所选">${icon("trash2")}</button></div></div>`;
+      container.innerHTML = `<div class="visual-panel-head"><h2>${esc(info.type)}</h2></div><div class="multi-selection-panel"><p>按住 Shift 可继续选择或取消选择图层。</p><section class="property-section"><h3>对齐所选图层</h3><div class="alignment-actions">${tool("alignSelectionLeft", "alignLeft", "左对齐")}${tool("alignSelectionCenter", "alignCenter", "水平居中")}${tool("alignSelectionRight", "alignRight", "右对齐")}${tool("alignSelectionTop", "arrowUp", "顶部对齐")}${tool("alignSelectionMiddle", "minus", "垂直居中")}${tool("alignSelectionBottom", "arrowDown", "底部对齐")}</div></section><div class="element-actions stacked"><button type="button" class="button" id="groupElements">${icon("group")}组合</button><button type="button" class="button" id="lockElement">${icon(info.locked ? "unlock" : "lockKeyhole")}${info.locked ? "解锁" : "锁定"}</button><button type="button" class="button" id="duplicateElement">${icon("copy")}复制所选</button><button type="button" class="icon-button danger" id="deleteElement" aria-label="删除所选">${icon("trash2")}</button></div></div>`;
       for (const [id, alignment] of [
         ["alignSelectionLeft", "left"],
         ["alignSelectionCenter", "center"],
@@ -560,6 +572,8 @@ export async function mountVisualEditor({
         $("#" + id).onclick = () => canvas.alignSelection(alignment);
       $("#duplicateElement").onclick = () => canvas.duplicateSelection();
       $("#deleteElement").onclick = () => canvas.deleteSelection();
+      $("#groupElements").onclick = () => canvas.groupSelection();
+      $("#lockElement").onclick = () => canvas.toggleLock();
       return;
     }
     if (!container.querySelector("#elementProperties")) {
@@ -581,7 +595,7 @@ export async function mountVisualEditor({
         },
       )}</label></div></section>
       <section class="property-section"><h3>文字</h3><div class="inspector-fields text-properties">${numberField("fontSize", "字号", 6, 400)}${colorField("color", "文字颜色")}</div><div class="text-style-actions">${tool("textBold", "bold", "加粗")}${tool("textItalic", "italic", "斜体")}${tool("textUnderline", "underline", "下划线")}${tool("textStrike", "strikethrough", "删除线")}</div><div class="text-style-actions text-align-actions">${tool("textAlignLeft", "alignLeft", "左对齐")}${tool("textAlignCenter", "alignCenter", "居中")}${tool("textAlignRight", "alignRight", "右对齐")}</div><button type="button" class="button" id="editElementText">${icon("pencil")}编辑文字</button></section>
-      <section class="property-section"><button type="button" class="button element-link-button" id="editElementLink">${icon("link")}<span>添加链接</span></button><div class="element-actions"><button type="button" class="button" id="duplicateElement">${icon("copy")}复制</button><button type="button" class="icon-button danger" id="deleteElement" aria-label="删除元素" title="删除元素">${icon("trash2")}</button></div></section></form>`;
+      <section class="property-section"><button type="button" class="button element-link-button" id="editElementLink">${icon("link")}<span>添加链接</span></button><div class="element-actions"><button type="button" class="button" id="lockElement"></button><button type="button" class="button" id="ungroupElement">${icon("ungroup")}取消组合</button><button type="button" class="button" id="duplicateElement">${icon("copy")}复制</button><button type="button" class="icon-button danger" id="deleteElement" aria-label="删除元素" title="删除元素">${icon("trash2")}</button></div></section></form>`;
       enhanceNumbers(container);
       enhanceSelects(container);
       $("#elementProperties").onsubmit = (event) => event.preventDefault();
@@ -613,6 +627,8 @@ export async function mountVisualEditor({
       $("#selectParent").onclick = () => canvas.selectParent();
       $("#duplicateElement").onclick = () => canvas.duplicateSelection();
       $("#deleteElement").onclick = () => canvas.deleteSelection();
+      $("#lockElement").onclick = () => canvas.toggleLock();
+      $("#ungroupElement").onclick = () => canvas.ungroupSelection();
       $("#editElementText").onclick = () => canvas.startEdit();
       for (const [id, alignment] of [
         ["alignSelectionLeft", "left"],
@@ -664,6 +680,16 @@ export async function mountVisualEditor({
       ? "编辑链接"
       : "添加链接";
     $("#selectParent").disabled = !info.canParent;
+    $("#lockElement").innerHTML = info.locked
+      ? `${icon("unlock")}解锁`
+      : `${icon("lockKeyhole")}锁定`;
+    $("#ungroupElement").hidden = !info.group;
+    $("#elementProperties")
+      .querySelectorAll("input,button")
+      .forEach((control) => {
+        if (!["lockElement", "selectParent"].includes(control.id))
+          control.disabled = info.locked;
+      });
     for (const input of container.querySelectorAll('input[type="number"]')) {
       if (input !== document.activeElement) input.value = info[input.name];
     }
@@ -722,6 +748,54 @@ export async function mountVisualEditor({
   });
   canvas.go(Math.max(0, Math.trunc(initialPage) - 1));
   updateNotes();
+  const themePresets = {
+    classic: {
+      font: "sans",
+      accent: "#276455",
+      text: "#243d36",
+      background: "#ffffff",
+    },
+    midnight: {
+      font: "modern",
+      accent: "#f2b84b",
+      text: "#edf3f7",
+      background: "#111827",
+    },
+    warm: {
+      font: "serif",
+      accent: "#a85132",
+      text: "#46352e",
+      background: "#fff8ef",
+    },
+    minimal: {
+      font: "modern",
+      accent: "#111827",
+      text: "#374151",
+      background: "#f8fafc",
+    },
+  };
+  function setThemeControls(theme) {
+    setSelectValue($("#deckThemeFont"), theme.font);
+    $("#deckThemeAccent").value = theme.accent;
+    $("#deckThemeText").value = theme.text;
+    $("#deckThemeBackground").value = theme.background;
+  }
+  root.querySelector(".theme-presets").onclick = (event) => {
+    const button = event.target.closest("[data-theme-preset]");
+    if (!button) return;
+    setThemeControls(themePresets[button.dataset.themePreset]);
+    root
+      .querySelectorAll("[data-theme-preset]")
+      .forEach((item) => item.classList.toggle("active", item === button));
+  };
+  $("#applyDeckTheme").onclick = () => {
+    canvas.applyTheme({
+      font: $("#deckThemeFont").value,
+      accent: $("#deckThemeAccent").value,
+      text: $("#deckThemeText").value,
+      background: $("#deckThemeBackground").value,
+    });
+  };
   $("#slideList").onclick = (event) => {
     const button = event.target.closest("[data-page-index]");
     if (button) canvas.go(Number(button.dataset.pageIndex));
@@ -782,6 +856,9 @@ export async function mountVisualEditor({
     formula.open("", true);
   };
   $("#insertText").onclick = () => canvas.insert("text");
+  $("#insertTable").onclick = () => canvas.insert("table");
+  $("#insertChart").onclick = () => canvas.insert("chart");
+  $("#insertMedia").onclick = () => $("#visualMediaFile").click();
   bindPopoverToggle($("#insertShape"), $("#shapePopover"));
   $("#shapePopover").onclick = (event) => {
     const button = event.target.closest("[data-shape]");
@@ -858,6 +935,30 @@ export async function mountVisualEditor({
       onError(error);
     } finally {
       $("#insertImage").disabled = false;
+    }
+  };
+  $("#visualMediaFile").onchange = async (event) => {
+    const file = event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+    $("#insertMedia").disabled = true;
+    try {
+      const extension = file.name.split(".").at(-1).toLowerCase(),
+        name = `media-${crypto.randomUUID().slice(0, 12)}.${extension}`,
+        { assets } = await api(`/decks/${id}/assets`, {
+          method: "POST",
+          body: { files: [{ ...(await fileBase64(file)), name }] },
+        }),
+        asset = assets.find((entry) => entry.name === name);
+      if (!asset) throw new Error("媒体上传失败");
+      canvas.insert(
+        file.type.startsWith("video/") ? "video" : "audio",
+        asset.path,
+      );
+    } catch (error) {
+      onError(error);
+    } finally {
+      $("#insertMedia").disabled = false;
     }
   };
   $("#visualPageTitle").onchange = (event) =>

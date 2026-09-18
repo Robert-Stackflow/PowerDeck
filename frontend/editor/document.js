@@ -41,7 +41,7 @@ export function visualDocument({
   thumbnail = false,
 }) {
   const styles = (baseCSS + "\n" + css).replace(/<\/style/gi, "<\\/style");
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline' 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'"><base href="${esc(baseURL)}"><style>${styles}</style><style>
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline' 'self'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'"><base href="${esc(baseURL)}"><style>${styles}</style><style>
     html,body{margin:0!important;overflow:hidden!important;width:100%;height:100%;background:${thumbnail ? "transparent" : "var(--editor-stage-bg,#e9edeb)"}!important}
     #stage{position:fixed!important;inset:0!important;display:flex!important;align-items:center!important;justify-content:center!important}
     #deck{position:relative!important;flex:none!important;width:${width}px!important;height:${height}px!important;transform:scale(var(--ve-scale,1))!important;transform-origin:center!important;box-shadow:${thumbnail ? "none" : "0 8px 40px #163b2b15"}}

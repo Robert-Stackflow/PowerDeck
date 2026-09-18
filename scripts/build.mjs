@@ -151,6 +151,12 @@ const names = [
   "ShieldCheck",
   "ExternalLink",
   "CheckCheck",
+  "Group",
+  "Ungroup",
+  "Unlock",
+  "Table2",
+  "ChartNoAxesColumn",
+  "Clapperboard",
 ];
 const selected = { ...presenterIcons };
 for (const name of names) {

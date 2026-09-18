@@ -348,8 +348,8 @@ export function createStore(dataDir, seedDir) {
       requireValue(assetTypes[ext], "支持图片、SVG 和字体文件");
       const data = Buffer.from(f.base64, "base64");
       requireValue(
-        data.length > 0 && data.length <= 12 * 1024 * 1024,
-        "单个素材需小于 12 MB",
+        data.length > 0 && data.length <= 30 * 1024 * 1024,
+        "单个素材需小于 30 MB",
       );
       const name = (f.path || f.name).replace(/^assets\//, "");
       requireValue(

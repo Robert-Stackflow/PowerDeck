@@ -3,7 +3,7 @@ import { shapeMarkup, shapes, safeLink } from "./shapes.js";
 import { createGuides } from "./guides.js";
 import { wheelNavigation } from "../components/wheel-navigation.js";
 
-const atomic = ".math,[data-tex],.katex,svg,img,video,canvas";
+const atomic = ".math,[data-tex],.katex,svg,img,video,audio,canvas";
 const textTags = "h1,h2,h3,h4,h5,h6,p,li,td,th,figcaption,blockquote";
 const round = (n) => Math.round(n * 10) / 10;
 const clamp = (n, low, high) => Math.min(high, Math.max(low, n));
@@ -54,7 +54,7 @@ export async function createCanvas({
   const layerNodes = () =>
     [
       ...slide().querySelectorAll(
-        "[data-editor-element],h1,h2,h3,h4,h5,h6,p,blockquote,img,svg,video,canvas,.math,[data-tex]",
+        "[data-editor-element],h1,h2,h3,h4,h5,h6,p,blockquote,img,svg,video,audio,canvas,.math,[data-tex]",
       ),
     ].filter((node) => {
       const component = node.parentElement?.closest(
@@ -76,6 +76,7 @@ export async function createCanvas({
         label: layerLabel(node, index),
         type: node.dataset.editorElement || node.tagName.toLowerCase(),
         selected: selectedNodes.has(node),
+        locked: node.dataset.editorLocked === "true",
       })),
     );
   }
@@ -195,6 +196,9 @@ export async function createCanvas({
         type: `已选择 ${selectedNodes.size} 个图层`,
         multi: true,
         count: selectedNodes.size,
+        locked: [...selectedNodes].every(
+          (node) => node.dataset.editorLocked === "true",
+        ),
         x: round((left - parent.left) / scale),
         y: round((top - parent.top) / scale),
         width: round((right - left) / scale),
@@ -253,6 +257,8 @@ export async function createCanvas({
       bold: Number(style.fontWeight) >= 600 || style.fontWeight === "bold",
       align: style.textAlign,
       image: selected.matches("img"),
+      group: selected.dataset.editorElement === "group",
+      locked: selected.dataset.editorLocked === "true",
     };
   }
   function select(node, additive = false) {
@@ -277,7 +283,7 @@ export async function createCanvas({
       !node ||
       node.namespaceURI !== "http://www.w3.org/1999/xhtml" ||
       node.matches(
-        "img,video,canvas,hr,[data-editor-element=shape],.math,[data-tex],.katex",
+        "img,video,audio,canvas,hr,[data-editor-element=shape],[data-editor-element=table],[data-editor-element=chart],.math,[data-tex],.katex",
       ) ||
       node.querySelector(atomic)
     )
@@ -328,7 +334,7 @@ export async function createCanvas({
     if (component) return component;
     const math = target.closest(".math,[data-tex]") || target.closest(".katex");
     if (math) return math;
-    const graphic = target.closest("svg,img,video,canvas");
+    const graphic = target.closest("svg,img,video,audio,canvas");
     if (graphic) return graphic;
     const paragraph = target.closest(textTags);
     if (paragraph && canEdit(paragraph)) return paragraph;
@@ -387,6 +393,8 @@ export async function createCanvas({
       select(node, event.shiftKey);
     if (!node) return;
     if (!selectedNodes.has(node)) return;
+    if ([...selectedNodes].some((item) => item.dataset.editorLocked === "true"))
+      return;
     event.preventDefault();
     if (event.detail >= 2) return;
     const origin = translations(node);
@@ -408,7 +416,13 @@ export async function createCanvas({
     };
   }
   function startResize(event) {
-    if (!selected || selectedNodes.size > 1 || event.button !== 0) return;
+    if (
+      !selected ||
+      selected.dataset.editorLocked === "true" ||
+      selectedNodes.size > 1 ||
+      event.button !== 0
+    )
+      return;
     event.preventDefault();
     event.stopPropagation();
     finishEdit();
@@ -486,6 +500,7 @@ export async function createCanvas({
     onSelect(info());
   }
   function startEdit() {
+    if (selected?.dataset.editorLocked === "true") return;
     if (selected?.matches(".math,[data-tex],.katex,.katex-display")) {
       onFormulaRequest(info());
       return;
@@ -552,7 +567,12 @@ export async function createCanvas({
   }
   function updateProperties(values) {
     finishEdit();
-    if (!selected) return;
+    if (
+      !selected ||
+      selected.dataset.editorLocked === "true" ||
+      selectedNodes.size > 1
+    )
+      return;
     const before = info();
     let dx = 0,
       dy = 0;
@@ -704,7 +724,11 @@ export async function createCanvas({
   }
   function deleteSelection() {
     finishEdit();
-    if (!selected) return;
+    if (
+      !selected ||
+      [...selectedNodes].some((node) => node.dataset.editorLocked === "true")
+    )
+      return;
     const nodes = [...selectedNodes];
     selected = null;
     selectedNodes.clear();
@@ -734,9 +758,132 @@ export async function createCanvas({
     layersChanged();
     pushHistory();
   }
+  function toggleLock() {
+    finishEdit();
+    if (!selectedNodes.size) return;
+    const lock = ![...selectedNodes].every(
+      (node) => node.dataset.editorLocked === "true",
+    );
+    for (const node of selectedNodes)
+      if (lock) node.dataset.editorLocked = "true";
+      else delete node.dataset.editorLocked;
+    pushHistory();
+    onSelect(info());
+  }
+  function groupSelection() {
+    finishEdit();
+    const nodes = [...selectedNodes];
+    if (
+      nodes.length < 2 ||
+      nodes.some((node) => node.dataset.editorLocked === "true")
+    )
+      return;
+    const slideBox = slide().getBoundingClientRect(),
+      boxes = nodes.map((node) => ({
+        node,
+        box: node.getBoundingClientRect(),
+      })),
+      left = Math.min(...boxes.map(({ box }) => box.left)),
+      top = Math.min(...boxes.map(({ box }) => box.top)),
+      right = Math.max(...boxes.map(({ box }) => box.right)),
+      bottom = Math.max(...boxes.map(({ box }) => box.bottom)),
+      group = doc.createElement("div");
+    group.dataset.editorElement = "group";
+    setStyle(group, {
+      position: "absolute",
+      left: `${round((left - slideBox.left) / scale)}px`,
+      top: `${round((top - slideBox.top) / scale)}px`,
+      width: `${round((right - left) / scale)}px`,
+      height: `${round((bottom - top) / scale)}px`,
+      margin: "0",
+      zIndex: String(
+        Math.max(
+          ...nodes.map(
+            (node) => Number(win.getComputedStyle(node).zIndex) || 0,
+          ),
+        ),
+      ),
+    });
+    slide().append(group);
+    for (const { node, box } of boxes) {
+      setStyle(node, {
+        position: "absolute",
+        left: `${round((box.left - left) / scale)}px`,
+        top: `${round((box.top - top) / scale)}px`,
+        width: `${round(box.width / scale)}px`,
+        height: `${round(box.height / scale)}px`,
+        margin: "0",
+        translate: "none",
+      });
+      group.append(node);
+    }
+    select(group);
+    pushHistory();
+  }
+  function ungroupSelection() {
+    finishEdit();
+    if (
+      selectedNodes.size !== 1 ||
+      selected?.dataset.editorElement !== "group" ||
+      selected.dataset.editorLocked === "true"
+    )
+      return;
+    const group = selected,
+      slideBox = slide().getBoundingClientRect(),
+      children = [...group.children],
+      boxes = children.map((node) => ({
+        node,
+        box: node.getBoundingClientRect(),
+      }));
+    selected = null;
+    selectedNodes.clear();
+    for (const { node, box } of boxes) {
+      setStyle(node, {
+        position: "absolute",
+        left: `${round((box.left - slideBox.left) / scale)}px`,
+        top: `${round((box.top - slideBox.top) / scale)}px`,
+        width: `${round(box.width / scale)}px`,
+        height: `${round(box.height / scale)}px`,
+        translate: "none",
+      });
+      slide().append(node);
+      selectedNodes.add(node);
+    }
+    group.remove();
+    selected = children.at(-1) || null;
+    selectedNodes.forEach((node) => node.setAttribute("data-ve-selected", ""));
+    pushHistory();
+    boxUpdate();
+    onSelect(info());
+  }
+  function applyTheme(theme) {
+    const colors = [theme.accent, theme.text, theme.background];
+    if (!colors.every((value) => /^#[0-9a-f]{6}$/i.test(value))) return;
+    const fonts = {
+      sans: 'Inter,"PingFang SC","Microsoft YaHei",sans-serif',
+      serif: 'Georgia,"Songti SC","SimSun",serif',
+      modern: 'Arial,"PingFang SC","Microsoft YaHei",sans-serif',
+      rounded: '"Arial Rounded MT Bold","PingFang SC",sans-serif',
+    };
+    const font = fonts[theme.font] || fonts.sans,
+      marker =
+        /\/\* PowerDeck Theme Start \*\/[\s\S]*?\/\* PowerDeck Theme End \*\//,
+      block = `/* PowerDeck Theme Start */\n#deck{--pd-accent:${theme.accent};--pd-text:${theme.text};--pd-background:${theme.background};--pd-font:${font}}\n#deck>.slide{background:var(--pd-background)!important;color:var(--pd-text);font-family:var(--pd-font)!important}\n#deck>.slide :where(h1,h2,h3,h4,h5,h6){color:var(--pd-accent);font-family:var(--pd-font)!important}\n#deck>.slide :where(p,li,blockquote,td,th){font-family:var(--pd-font)!important}\n/* PowerDeck Theme End */`;
+    css = marker.test(css) ? css.replace(marker, block) : `${css}\n${block}`;
+    const documentStyles = doc.head.querySelector("style");
+    if (documentStyles) documentStyles.textContent = baseCSS + "\n" + css;
+    onCSSChange(css);
+    onDirty();
+  }
   function insert(kind, src) {
     finishEdit();
-    const node = doc.createElement(kind === "image" ? "img" : "div");
+    const node = doc.createElement(
+      kind === "image"
+        ? "img"
+        : ["video", "audio"].includes(kind)
+          ? kind
+          : "div",
+    );
     node.dataset.editorElement = kind;
     const styles = {
       position: "absolute",
@@ -768,6 +915,56 @@ export async function createCanvas({
         boxUpdate();
         onSelect(info());
       };
+    } else if (kind === "video" || kind === "audio") {
+      node.src = src;
+      node.controls = true;
+      node.preload = "metadata";
+      Object.assign(styles, {
+        width: kind === "video" ? "640px" : "520px",
+        height: kind === "video" ? "360px" : "64px",
+        background: "#111827",
+        borderRadius: "12px",
+      });
+    } else if (kind === "table") {
+      node.innerHTML = `<table><tbody>${Array.from({ length: 4 }, (_, row) => `<tr>${Array.from({ length: 4 }, (_, column) => `<td>${row === 0 ? `标题 ${column + 1}` : "内容"}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+      Object.assign(styles, {
+        width: "760px",
+        height: "300px",
+        fontSize: "24px",
+      });
+      node.querySelector("table").style.cssText =
+        "width:100%;height:100%;border-collapse:collapse;background:#fff;color:#243d36";
+      node.querySelectorAll("td").forEach((cell, index) => {
+        cell.style.cssText = `border:1px solid #b9c9c2;padding:12px;${index < 4 ? "font-weight:600;background:#eaf1ed" : ""}`;
+      });
+    } else if (kind === "chart") {
+      node.innerHTML = `<div class="pd-chart-title">数据图表</div><div class="pd-chart-bars">${[62, 84, 46, 72, 92].map((value, index) => `<div><i style="height:${value}%"></i><span>${String.fromCharCode(65 + index)}</span></div>`).join("")}</div>`;
+      Object.assign(styles, {
+        width: "720px",
+        height: "400px",
+        padding: "24px",
+        background: "#fff",
+        color: "#243d36",
+        borderRadius: "14px",
+      });
+      node.querySelector(".pd-chart-title").style.cssText =
+        "font-size:28px;font-weight:600;margin-bottom:18px";
+      node.querySelector(".pd-chart-bars").style.cssText =
+        "height:300px;display:flex;align-items:flex-end;gap:24px;border-bottom:2px solid #c8d4ce";
+      node
+        .querySelectorAll(".pd-chart-bars>div")
+        .forEach(
+          (bar) =>
+            (bar.style.cssText =
+              "height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;text-align:center;gap:8px"),
+        );
+      node
+        .querySelectorAll(".pd-chart-bars i")
+        .forEach(
+          (bar) =>
+            (bar.style.cssText +=
+              ";display:block;background:#3f806a;border-radius:8px 8px 0 0"),
+        );
     } else {
       const shape = shapes.find((item) => item.id === src) || shapes[1];
       node.dataset.shape = shape.id;
@@ -1206,6 +1403,10 @@ export async function createCanvas({
     finishEdit,
     duplicateSelection,
     deleteSelection,
+    toggleLock,
+    groupSelection,
+    ungroupSelection,
+    applyTheme,
     selectParent: () => {
       if (selected && selected.parentElement !== slide())
         select(selected.parentElement);
