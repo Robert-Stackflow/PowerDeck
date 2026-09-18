@@ -1134,10 +1134,10 @@ export function mountPresenter({
   function connectionsMarkup(connections = []) {
     return connections.length
       ? connections
-          .map(
-            (connection) =>
-              `<article><span class="connection-device-icon">${ico(/Mobile|iPhone|Android/i.test(connection.userAgent) ? "smartphone" : "monitor")}</span><div><b>${escapeHTML(connection.name || connectionDevice(connection.userAgent))}</b><small title="${escapeHTML(connection.userAgent)}">${escapeHTML(connection.name ? `${connectionDevice(connection.userAgent)} · ${connection.userAgent}` : connection.userAgent)}</small><em>设备 ${escapeHTML(connection.deviceId.slice(0, 8))} · ${escapeHTML(connection.ip)}</em></div><time>${new Date(connection.lastSeen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></article>`,
-          )
+          .map((connection) => {
+            const device = connectionDevice(connection.userAgent);
+            return `<article class="connection-item"><span class="connection-device-icon">${ico(/Mobile|iPhone|Android/i.test(connection.userAgent) ? "smartphone" : "monitor")}</span><div class="connection-details"><div class="connection-title"><b>${escapeHTML(connection.name || device)}</b><span><i></i>在线</span></div><small title="${escapeHTML(connection.userAgent)}">${escapeHTML(device)} · ${escapeHTML(connection.userAgent)}</small><div class="connection-meta"><em>设备 ${escapeHTML(connection.deviceId.slice(0, 8))}</em><em>${escapeHTML(connection.ip)}</em></div></div><time><i></i>${new Date(connection.lastSeen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></article>`;
+          })
           .join("")
       : '<p class="session-empty">等待设备连接</p>';
   }
@@ -1278,7 +1278,13 @@ export function mountPresenter({
       scheduleCollapse = () => {
         hostWindow.clearTimeout(roomFeedCollapseTimer);
         roomFeedCollapseTimer = hostWindow.setTimeout(() => {
-          if (!feed.matches(":focus-within")) setRoomFeedCollapsed(true);
+          const hasDraft = !!String(input.value || "").trim(),
+            pickerOpen = picker && !picker.hidden;
+          if (hasDraft || pickerOpen) {
+            scheduleCollapse();
+            return;
+          }
+          setRoomFeedCollapsed(true);
         }, 9000);
       };
     feedToggle.onclick = () => {
@@ -1287,6 +1293,7 @@ export function mountPresenter({
     };
     feed.addEventListener("pointerdown", scheduleCollapse);
     feed.addEventListener("focusin", scheduleCollapse);
+    input.addEventListener("input", scheduleCollapse);
     scheduleCollapse();
     toggle.onclick = () => {
       picker.hidden = !picker.hidden;
@@ -1341,6 +1348,7 @@ export function mountPresenter({
         }
         input.value = "";
         toast("评论已发布");
+        scheduleCollapse();
       } catch (error) {
         toast(error.message);
       } finally {
@@ -1362,6 +1370,13 @@ export function mountPresenter({
     if (!collapsed) {
       roomFeedUnread = 0;
       if (badge) badge.hidden = true;
+    } else {
+      const picker = feed.querySelector(".room-emoji-picker"),
+        emojiToggle = feed.querySelector(".room-emoji-toggle"),
+        active = document.activeElement;
+      if (picker) picker.hidden = true;
+      if (emojiToggle) emojiToggle.setAttribute("aria-expanded", "false");
+      if (active && feed.contains(active)) active.blur();
     }
   }
   function showCollapsedComment(comment) {
