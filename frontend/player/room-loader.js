@@ -18,7 +18,7 @@ async function read(url) {
   const response = await fetch(url, { cache: "no-store" });
   const value = await response.json().catch(() => ({}));
   if (!response.ok)
-    throw Object.assign(new Error(value.error || "无法加入演示房间"), {
+    throw Object.assign(new Error(value.error || "无法加入房间"), {
       status: response.status,
     });
   return value;
@@ -61,7 +61,7 @@ function applyMessage(message) {
     presentation.applyRoomInk(message.page, message.strokes);
   else if (message.type === "participants")
     presentation.updateRoomParticipants(message.count);
-  else if (message.type === "ended") fail(new Error("房主已结束演示房间"));
+  else if (message.type === "ended") fail(new Error("房主已结束房间"));
 }
 
 function connect() {

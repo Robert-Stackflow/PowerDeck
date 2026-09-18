@@ -2212,7 +2212,11 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   transform: rotate(45deg);
 }
 .room-session-card {
-  width: min(760px, calc(100vw - 48px));
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .room-permissions {
   margin-top: 16px;
@@ -2301,6 +2305,173 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .room-viewer #controls {
   min-width: 0;
 }
+#roomPanel {
+  width: min(1040px, calc(100vw - 48px));
+  height: min(780px, calc(100dvh - 56px));
+  padding: 24px 28px;
+  overflow: hidden;
+}
+#roomPanel .overlay-head {
+  flex: none;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+}
+.room-dashboard {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+.room-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  flex: none;
+  padding: 5px;
+  border: 1px solid #dce4df;
+  border-radius: 13px;
+  background: #f1f4f2;
+}
+.room-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 39px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #697971;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.room-tabs button[aria-selected="true"] {
+  background: white;
+  color: #285b49;
+  box-shadow: 0 2px 9px #1c3a2f14;
+  font-weight: 650;
+}
+.room-tabs button span {
+  min-width: 19px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #dfe7e3;
+  color: #65766e;
+  font-size: 9px;
+}
+.room-tabs button[aria-selected="true"] span {
+  background: #e4f1eb;
+  color: #39745d;
+}
+.room-tab-panel {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  margin-top: 16px;
+  padding-right: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.room-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(330px, 0.92fr);
+  gap: 18px;
+  min-width: 0;
+}
+.room-settings-grid > * {
+  min-width: 0;
+}
+.room-settings-grid .room-permissions {
+  margin-top: 0;
+}
+.room-settings-grid .room-connect {
+  align-content: center;
+  margin: 0;
+  padding: 18px;
+  border: 1px solid #dce4df;
+  border-radius: 14px;
+  background: #fff;
+}
+.room-settings-grid .session-link {
+  min-width: 0;
+}
+.room-settings-grid .session-link input {
+  min-width: 0;
+  width: 100%;
+}
+.room-members {
+  min-height: 100%;
+  margin: 0;
+}
+.room-members .connection-list {
+  max-height: none;
+}
+.room-poll-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  min-width: 0;
+}
+.room-poll-layout > * {
+  min-width: 0;
+  margin: 0;
+}
+.room-comments {
+  min-height: 100%;
+  padding: 18px;
+  border: 1px solid #dce4df;
+  border-radius: 14px;
+  background: #fff;
+}
+.room-comment-list {
+  display: grid;
+}
+.room-comment-list > button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 2px;
+  border: 0;
+  border-top: 1px solid #e5eae7;
+  background: transparent;
+  color: #557066;
+  text-align: right;
+}
+.room-comment-list > button span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: #263e36;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.room-comment-list > button b {
+  color: #829089;
+  font-size: 10px;
+}
+.room-comment-list > button em {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  color: #507363;
+  font-size: 10px;
+  font-style: normal;
+  white-space: nowrap;
+}
+.room-comment-list > button em svg {
+  width: 14px;
+}
+.room-comment-list > button.answered {
+  opacity: 0.52;
+}
 @media (max-width: 700px) {
   .room-live-feed {
     top: auto;
@@ -2321,6 +2492,28 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   }
   .room-session-card {
     width: 100%;
+  }
+  #roomPanel {
+    width: 100%;
+    height: min(88dvh, 760px);
+    max-height: min(88dvh, 760px);
+    padding: 20px 16px calc(16px + env(safe-area-inset-bottom));
+  }
+  .room-tabs {
+    gap: 2px;
+    padding: 4px;
+  }
+  .room-tabs button {
+    min-height: 38px;
+    padding: 0 4px;
+    font-size: 11px;
+  }
+  .room-tabs button span {
+    display: none;
+  }
+  .room-settings-grid,
+  .room-poll-layout {
+    grid-template-columns: 1fr;
   }
   .room-interaction-overlay .session-dialog-card {
     width: 100%;
