@@ -574,6 +574,19 @@
 .page-transition-settings .select-trigger {
   height: 36px;
 }
+.page-transition-settings > .button {
+  width: 100%;
+  justify-content: center;
+  margin-top: 10px;
+}
+.transition-apply-status {
+  min-height: 16px;
+  margin: 7px 0 -7px;
+  color: var(--green);
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: center;
+}
 .layer-panel {
   border-top: 1px solid var(--line);
 }

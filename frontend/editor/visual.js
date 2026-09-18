@@ -77,7 +77,7 @@ export async function mountVisualEditor({
           ["zoom", "轻微缩放"],
         ],
       },
-    )}</label></section><section class="layer-panel"><header><h2>图层</h2><span id="layerCount">0</span></header><div id="layerList"></div><footer><button type="button" class="icon-button" data-layer-action="front" title="置于顶层">${icon("arrowUp")}</button><button type="button" class="icon-button" data-layer-action="up" title="上移一层">${icon("chevronUp")}</button><button type="button" class="icon-button" data-layer-action="down" title="下移一层">${icon("chevronDown")}</button><button type="button" class="icon-button" data-layer-action="back" title="置于底层">${icon("arrowDown")}</button></footer></section>`,
+    )}</label><button type="button" class="button" id="applyTransitionAll">${icon("copy")}应用到全部页面</button><p id="transitionApplyStatus" class="transition-apply-status" role="status"></p></section><section class="layer-panel"><header><h2>图层</h2><span id="layerCount">0</span></header><div id="layerList"></div><footer><button type="button" class="icon-button" data-layer-action="front" title="置于顶层">${icon("arrowUp")}</button><button type="button" class="icon-button" data-layer-action="up" title="上移一层">${icon("chevronUp")}</button><button type="button" class="icon-button" data-layer-action="down" title="下移一层">${icon("chevronDown")}</button><button type="button" class="icon-button" data-layer-action="back" title="置于底层">${icon("arrowDown")}</button></footer></section>`,
   );
   enhanceSelects($("#inspectorPagePanel"));
   let canvas,
@@ -967,6 +967,20 @@ export async function mountVisualEditor({
     canvas.updateNote({ notes: event.target.value });
   $("#pageTransition").onchange = (event) =>
     canvas.updatePage({ transition: event.target.value });
+  $("#applyTransitionAll").onclick = () => {
+    const transition = $("#pageTransition").value,
+      label = $("#pageTransitionTrigger")
+        ?.querySelector("span")
+        ?.textContent?.trim();
+    canvas.updateAllPages({ transition });
+    $("#transitionApplyStatus").textContent =
+      `已将“${label || "无"}”应用到全部页面`;
+    clearTimeout($("#transitionApplyStatus")._clearTimer);
+    $("#transitionApplyStatus")._clearTimer = setTimeout(
+      () => ($("#transitionApplyStatus").textContent = ""),
+      2400,
+    );
+  };
   $("#visualPageTitle").oninput = $("#visualPageNotes").oninput = onDirty;
   $("#addReference").onclick = () => {
     if ($("#referenceList").querySelectorAll(".reference-row").length >= 40)

@@ -1431,6 +1431,12 @@ export async function createCanvas({
         : "none";
       pushHistory();
     },
+    updateAllPages: ({ transition }) => {
+      const allowed = new Set(["none", "fade", "slide", "zoom"]),
+        value = allowed.has(transition) ? transition : "none";
+      for (const page of slides()) page.dataset.transition = value;
+      pushHistory();
+    },
     updateNote: (values) => {
       if (
         Object.entries(values).every(
