@@ -1741,9 +1741,12 @@ export function mountPresenter({
   }
   function renderRoom() {
     if (!roomSession) return;
-    const body = $("roomBody");
+    const body = $("roomBody"),
+      panel = $("roomPanel");
+    panel?.classList.remove("room-setup-mode");
+    panel?.classList.add("room-dashboard-mode");
     body.className = "room-dashboard";
-    body.innerHTML = `<div class="room-dashboard-shell"><aside class="room-dashboard-nav"><div class="room-live-summary"><span><i></i>房间进行中</span><strong><b id="roomNavCount">${roomSession.connections?.length || 0}</b> 人在线</strong><small>页面、光标与批注正在同步</small></div><nav class="room-tabs" role="tablist" aria-label="房间管理">${roomTabs.map(([id, label, icon]) => `<button type="button" role="tab" data-room-tab="${id}" aria-selected="${roomTab === id}"><span class="room-tab-icon">${ico(icon)}</span><span class="room-tab-label">${escapeHTML(label)}</span>${id === "members" ? `<em class="room-tab-badge">${roomSession.connections?.length || 0}</em>` : ""}</button>`).join("")}</nav><p class="room-nav-hint">房间中的更改会实时同步给所有参与者</p></aside><div id="roomTabPanel" class="room-tab-panel" role="tabpanel"></div></div>`;
+    body.innerHTML = `<div class="room-dashboard-shell"><aside class="room-dashboard-nav"><div class="room-live-summary"><span><i></i>房间进行中</span><strong><b id="roomNavCount">${roomSession.connections?.length || 0}</b> 人在线</strong><small>页面、光标与批注正在同步</small></div><nav class="room-tabs" role="tablist" aria-label="房间管理">${roomTabs.map(([id, label, icon]) => `<button type="button" role="tab" data-room-tab="${id}" aria-selected="${roomTab === id}"><span class="room-tab-icon">${ico(icon)}</span><span class="room-tab-label">${escapeHTML(label)}</span>${id === "members" ? `<em class="room-tab-badge">${roomSession.connections?.length || 0}</em>` : ""}</button>`).join("")}</nav></aside><div id="roomTabPanel" class="room-tab-panel" role="tabpanel"></div></div>`;
     body.querySelectorAll("[data-room-tab]").forEach(
       (button) =>
         (button.onclick = () => {
@@ -1761,6 +1764,8 @@ export function mountPresenter({
   }
   function renderRoomSetup() {
     const body = $("roomBody");
+    $("roomPanel")?.classList.remove("room-dashboard-mode");
+    $("roomPanel")?.classList.add("room-setup-mode");
     body.className = "room-setup";
     body.innerHTML = `<form id="roomSetupForm" class="room-setup-shell"><section class="room-setup-hero"><span class="room-setup-symbol">${ico("room")}</span><p class="room-setup-kicker">实时同步放映</p><h3>创建演示房间</h3><p>观众通过链接或二维码加入后，会同步看到当前页面、光标和批注。</p><ul><li>${ico("check")}页面切换即时同步</li><li>${ico("check")}评论、投票与评分集中管理</li><li>${ico("check")}权限可以随时调整</li></ul></section><section class="room-setup-config"><header><div><span>访问配置</span><h3>设置观众可用功能</h3></div><small>开启后仍可修改</small></header><label class="room-setup-password"><span><b>房间密码</b><em>可选</em></span><input name="password" type="password" maxlength="128" placeholder="不填写则无需密码"><small>设置后，观众需要输入密码才能加入。</small></label><fieldset class="room-setup-permission-grid"><legend>默认权限</legend>${roomPermissionRows.map(([key, label, description, icon]) => `<label><input type="checkbox" name="${key}" ${["directory", "interaction", "showInteractionFeed", "showOnlineCount"].includes(key) ? "checked" : ""}><span class="room-setup-option-icon">${ico(icon)}</span><span><b>${escapeHTML(label)}</b><small>${escapeHTML(description)}</small></span><i aria-hidden="true"></i></label>`).join("")}</fieldset><div class="room-setup-actions"><button type="button" data-close="roomPanel">取消</button><button type="submit" class="session-primary">${ico("room")}开启房间</button></div></section></form>`;
     body.querySelector("[data-close]").onclick = () => dismissPanel();
