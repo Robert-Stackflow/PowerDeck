@@ -213,6 +213,15 @@ export function createPlatform(store, dataDir, publicURL) {
       ...(admin ? { questions, connections, url: audienceURL(token) } : {}),
     };
   };
+  const audienceFeed = (token) => {
+    const state = audienceState(token),
+      comments = db
+        .prepare(
+          "SELECT id,name,body,created_at AS createdAt FROM audience_questions WHERE session_token=? ORDER BY created_at DESC LIMIT 30",
+        )
+        .all(token);
+    return { poll: state.poll, comments, updatedAt: Date.now() };
+  };
   const recordAudienceConnection = (token, connection) => {
     audienceSession(token);
     const now = Date.now(),
@@ -245,7 +254,7 @@ export function createPlatform(store, dataDir, publicURL) {
         .slice(0, 40);
     requireValue(
       body.length >= 1 && body.length <= 500,
-      "问题需为 1–500 个字符",
+      "评论需为 1–500 个字符",
     );
     db.prepare(
       "INSERT INTO audience_questions(id,session_token,name,body,created_at) VALUES(?,?,?,?,?)",
@@ -455,6 +464,7 @@ export function createPlatform(store, dataDir, publicURL) {
     useBrandAsset,
     createAudience,
     audienceState,
+    audienceFeed,
     recordAudienceConnection,
     askQuestion,
     createPoll,
@@ -474,7 +484,7 @@ export function createPlatform(store, dataDir, publicURL) {
           "UPDATE audience_questions SET answered=? WHERE id=? AND session_token=?",
         )
         .run(answered ? 1 : 0, id, token);
-      if (!result.changes) throw new HttpError(404, "问题不存在");
+      if (!result.changes) throw new HttpError(404, "评论不存在");
       return audienceState(token, true);
     },
     endAudience: (token) => {

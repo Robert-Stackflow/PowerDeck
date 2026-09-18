@@ -1,0 +1,46 @@
+#roomStatus {
+  position: fixed;
+  z-index: 20;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 999px;
+  background: rgb(17 23 31 / 0.78);
+  color: #dbe7e1;
+  font:
+    500 13px/1 system-ui,
+    sans-serif;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.22);
+  backdrop-filter: blur(14px);
+  transform: translateX(-50%);
+  transition: opacity 0.2s ease;
+}
+#roomStatus i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e3a63b;
+  box-shadow: 0 0 0 4px rgb(227 166 59 / 0.12);
+}
+#roomStatus.connected i {
+  background: #55c796;
+  box-shadow: 0 0 0 4px rgb(85 199 150 / 0.13);
+}
+#roomStatus.reconnecting i {
+  animation: roomPulse 1s infinite alternate;
+}
+@keyframes roomPulse {
+  to {
+    opacity: 0.35;
+  }
+}
+@media (max-width: 700px) {
+  #roomStatus {
+    top: max(9px, env(safe-area-inset-top));
+  }
+}

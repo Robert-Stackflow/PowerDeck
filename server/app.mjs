@@ -1,4 +1,5 @@
 import http from "node:http";
+import { WebSocketServer } from "ws";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -8,6 +9,7 @@ import { createStore } from "./store.mjs";
 import { createSettings } from "./settings.mjs";
 import { createAuth, passwordHash } from "./auth.mjs";
 import { createPlatform } from "./platform.mjs";
+import { createRooms } from "./rooms.mjs";
 import { importPowerPoint } from "./import/powerpoint.mjs";
 import { pipeline } from "node:stream/promises";
 import { renderExport, exportTypes } from "./render-export.mjs";
@@ -100,6 +102,7 @@ export async function createApp({
     site: settings.read,
   });
   const platform = createPlatform(store, dataDir, origin || publicURL || "");
+  const rooms = createRooms(store, origin || publicURL || "");
   const sendFile = (res, file, type) => {
     const data = fs.readFileSync(file);
     res.writeHead(200, { "Content-Type": type, "Content-Length": data.length });
@@ -235,6 +238,76 @@ export async function createApp({
           200,
           await loginRoutes[pathname](await readJSON(req, 131072)),
         );
+      if (parts[0] === "api" && parts[1] === "rooms" && parts[2]) {
+        const room = rooms.get(parts[2]);
+        if (!room) throw new HttpError(404, "房间不存在或已结束");
+        if (parts.length === 3 && method === "GET") {
+          const deck = store.get(room.deckId),
+            content = store.content(room.deckId);
+          if (!room.permissions.notes)
+            content.notes = Object.fromEntries(
+              Object.entries(content.notes).map(([page, value]) => [
+                page,
+                { title: value.title, notes: "", refs: [], figures: [] },
+              ]),
+            );
+          if (!room.permissions.directory)
+            content.notes = Object.fromEntries(
+              Object.entries(content.notes).map(([page, value]) => [
+                page,
+                { ...value, title: `第 ${page} 页` },
+              ]),
+            );
+          return json(res, 200, {
+            ...rooms.publicState(room),
+            meta: publicMeta(deck),
+            content,
+            interactionURL:
+              room.permissions.interaction && room.interactionToken
+                ? `${origin || requestURL.origin}/audience/${room.interactionToken}`
+                : null,
+            downloadURL: room.permissions.downloadPdf
+              ? `/api/rooms/${room.token}/export?format=pdf`
+              : null,
+          });
+        }
+        if (parts[3] === "feed" && method === "GET") {
+          if (
+            !room.permissions.interaction ||
+            !room.permissions.showInteractionFeed
+          )
+            throw new HttpError(403, "房主未开放互动悬浮列表");
+          return json(res, 200, platform.audienceFeed(room.interactionToken));
+        }
+        if (parts[3] === "files" && method === "GET") {
+          const file = store.file(room.deckId, parts.slice(4).join("/"));
+          res.setHeader(
+            "Content-Security-Policy",
+            "default-src 'none'; sandbox",
+          );
+          return sendFile(
+            res,
+            file,
+            assetTypes[path.extname(file).toLowerCase()],
+          );
+        }
+        if (parts[3] === "export" && method === "GET") {
+          if (!room.permissions.downloadPdf)
+            throw new HttpError(403, "房主未开放 PDF 下载权限");
+          const deck = store.get(room.deckId),
+            file = await renderExport(store, room.deckId, "pdf"),
+            name =
+              deck.title.replace(/[\x00-\x1f\x7f/\\<>:"|?*]/g, "_") + ".pdf";
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="${deck.id}.pdf"; filename*=UTF-8''${encodeURIComponent(name).replace(/'/g, "%27")}`,
+          );
+          res.setHeader("Content-Type", exportTypes.pdf);
+          res.setHeader("Content-Length", file.length);
+          res.end(file);
+          return;
+        }
+      }
       if (parts[0] === "api" && parts[1] === "remote" && parts[2]) {
         requireValue(
           /^[A-Za-z0-9_-]{32}$/.test(parts[2]),
@@ -476,6 +549,45 @@ export async function createApp({
             color: { dark: "#13251f", light: "#ffffff" },
           });
           return json(res, 201, audience);
+        }
+        if (pathname === "/api/rooms" && method === "POST") {
+          const input = await readJSON(req, 8192),
+            audience = platform.createAudience(input.deckId),
+            room = rooms.create({
+              deckId: input.deckId,
+              page: input.page,
+              permissions: input.permissions,
+              interactionToken: audience.token,
+            });
+          room.qr = await QRCode.toDataURL(room.url, {
+            width: 360,
+            margin: 1,
+            color: { dark: "#13251f", light: "#ffffff" },
+          });
+          audience.qr = await QRCode.toDataURL(audience.url, {
+            width: 320,
+            margin: 1,
+            color: { dark: "#13251f", light: "#ffffff" },
+          });
+          room.interaction = audience;
+          return json(res, 201, room);
+        }
+        if (parts[1] === "rooms" && parts[2]) {
+          const hostToken = String(req.headers["x-room-host"] || "");
+          if (parts.length === 3 && method === "PATCH")
+            return json(
+              res,
+              200,
+              rooms.update(parts[2], hostToken, await readJSON(req, 8192)),
+            );
+          if (parts.length === 3 && method === "DELETE") {
+            const room = rooms.remove(parts[2], hostToken);
+            if (room.interactionToken)
+              try {
+                platform.endAudience(room.interactionToken);
+              } catch {}
+            return json(res, 200, { ok: true });
+          }
         }
         if (parts[1] === "audience-sessions" && parts[2]) {
           const audienceToken = parts[2];
@@ -903,6 +1015,12 @@ export async function createApp({
           path.join(projectRoot, "frontend/audience.html"),
           "text/html; charset=utf-8",
         );
+      if (pathname.startsWith("/room/"))
+        return sendFile(
+          res,
+          path.join(projectRoot, "frontend/room.html"),
+          "text/html; charset=utf-8",
+        );
       if (pathname.startsWith("/present/") || pathname.startsWith("/s/"))
         return sendFile(
           res,
@@ -922,6 +1040,26 @@ export async function createApp({
       });
     }
   });
+  const roomSockets = new WebSocketServer({ noServer: true });
+  server.on("upgrade", (req, socket, head) => {
+    try {
+      const requestURL = new URL(req.url, "http://" + req.headers.host),
+        match = requestURL.pathname.match(/^\/ws\/rooms\/([A-Za-z0-9_-]{32})$/);
+      if (!match) return socket.destroy();
+      if (origin && req.headers.host !== new URL(origin).host)
+        return socket.destroy();
+      roomSockets.handleUpgrade(req, socket, head, (ws) =>
+        rooms.attach(
+          ws,
+          match[1],
+          requestURL.searchParams.get("host"),
+          clientConnection(req),
+        ),
+      );
+    } catch {
+      socket.destroy();
+    }
+  });
   return {
     server,
     store,
@@ -933,6 +1071,8 @@ export async function createApp({
       return `http://${host}:${server.address().port}`;
     },
     close: async () => {
+      rooms.close();
+      roomSockets.close();
       await new Promise((resolve) => server.close(resolve));
       store.close();
     },

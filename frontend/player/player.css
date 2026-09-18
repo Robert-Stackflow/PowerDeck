@@ -2031,3 +2031,299 @@ body[data-tool="pointer"] #stage [data-editor-href] {
     display: none !important;
   }
 }
+
+#roomPointer {
+  position: fixed;
+  z-index: 44;
+  width: 18px;
+  height: 18px;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: #ef4b4b;
+  box-shadow:
+    0 3px 14px #0008,
+    0 0 0 3px #ef4b4b55;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.65);
+  transition:
+    left 0.06s linear,
+    top 0.06s linear,
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+#roomPointer.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.room-online {
+  position: fixed;
+  z-index: 39;
+  top: max(18px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #ffffff1b;
+  border-radius: 999px;
+  background: #111922c9;
+  color: #f5faf7;
+  box-shadow: 0 8px 30px #0004;
+  backdrop-filter: blur(15px);
+  font-size: 12px;
+}
+.room-online svg {
+  width: 15px;
+}
+.room-online b {
+  color: #74d7aa;
+  font-size: 13px;
+}
+.room-online span {
+  color: #b9c7c0;
+}
+.room-live-feed {
+  position: fixed;
+  z-index: 38;
+  top: 50%;
+  right: max(18px, env(safe-area-inset-right));
+  width: min(320px, calc(100vw - 36px));
+  max-height: min(55vh, 520px);
+  overflow: hidden;
+  border: 1px solid #ffffff18;
+  border-radius: 18px;
+  background: #101820d9;
+  color: #edf6f1;
+  box-shadow: 0 18px 55px #0007;
+  backdrop-filter: blur(18px) saturate(1.2);
+  transform: translateY(-50%);
+  transition:
+    width 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.room-live-feed > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid #ffffff12;
+}
+.room-live-feed > header span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.room-live-feed > header span i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #58cf99;
+  box-shadow: 0 0 0 4px #58cf9920;
+}
+.room-live-feed > header button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: #ffffff0b;
+  color: #aebbb5;
+}
+.room-live-feed > header button svg {
+  width: 15px;
+}
+#roomFeedItems {
+  display: grid;
+  gap: 8px;
+  max-height: calc(min(55vh, 520px) - 48px);
+  padding: 10px;
+  overflow: auto;
+}
+#roomFeedItems > p {
+  margin: 14px;
+  color: #8e9c96;
+  text-align: center;
+  font-size: 11px;
+}
+#roomFeedItems article,
+.room-feed-poll {
+  padding: 11px 12px;
+  border: 1px solid #ffffff0d;
+  border-radius: 12px;
+  background: #ffffff09;
+  color: inherit;
+}
+#roomFeedItems article b {
+  display: block;
+  margin-bottom: 4px;
+  color: #78cda8;
+  font-size: 10px;
+}
+#roomFeedItems article p {
+  margin: 0;
+  color: #e1eae6;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.room-feed-poll {
+  display: grid;
+  width: 100%;
+  gap: 5px;
+  text-align: left;
+}
+.room-feed-poll span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #75cda6;
+  font-size: 10px;
+}
+.room-feed-poll span svg {
+  width: 13px;
+}
+.room-feed-poll b {
+  font-size: 12px;
+  line-height: 1.45;
+}
+.room-feed-poll small {
+  color: #9eaaa5;
+  font-size: 10px;
+}
+.room-live-feed.collapsed {
+  width: 48px;
+}
+.room-live-feed.collapsed #roomFeedItems,
+.room-live-feed.collapsed > header span {
+  display: none;
+}
+.room-live-feed.collapsed > header {
+  border: 0;
+  padding: 0 9px;
+}
+.room-live-feed.collapsed > header button svg {
+  transform: rotate(45deg);
+}
+.room-session-card {
+  width: min(760px, calc(100vw - 48px));
+}
+.room-permissions {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #dce4df;
+  border-radius: 14px;
+}
+.room-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+  margin-top: 12px;
+}
+.room-permission-grid label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  color: #40564d;
+  font-size: 11px;
+  cursor: pointer;
+}
+.room-permission-grid input {
+  position: absolute;
+  opacity: 0;
+}
+.room-permission-grid i {
+  position: relative;
+  width: 36px;
+  height: 21px;
+  flex: none;
+  border-radius: 999px;
+  background: #d8dfdb;
+  transition: 0.18s ease;
+}
+.room-permission-grid i::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 4px #0002;
+  transition: 0.18s ease;
+}
+.room-permission-grid input:checked + i {
+  background: #34775d;
+}
+.room-permission-grid input:checked + i::after {
+  transform: translateX(15px);
+}
+.room-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 16px;
+}
+.room-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 15px;
+  border: 1px solid #d5ded9;
+  border-radius: 11px;
+  background: white;
+  color: #52665d;
+}
+.room-actions button svg {
+  width: 16px;
+}
+.room-interaction-overlay .session-dialog-card {
+  width: min(620px, calc(100vw - 48px));
+  height: min(780px, calc(100dvh - 64px));
+}
+.room-interaction-overlay iframe {
+  width: 100%;
+  height: calc(100% - 66px);
+  border: 0;
+  border-radius: 0 0 16px 16px;
+  background: #f3f6f4;
+}
+.room-viewer #controls {
+  min-width: 0;
+}
+@media (max-width: 700px) {
+  .room-live-feed {
+    top: auto;
+    right: 12px;
+    bottom: calc(96px + env(safe-area-inset-bottom));
+    transform: none;
+    max-height: 38vh;
+  }
+  .room-live-feed.collapsed {
+    transform: none;
+  }
+  .room-online {
+    top: max(10px, env(safe-area-inset-top));
+    right: 10px;
+  }
+  .room-permission-grid {
+    grid-template-columns: 1fr;
+  }
+  .room-session-card {
+    width: 100%;
+  }
+  .room-interaction-overlay .session-dialog-card {
+    width: 100%;
+    height: min(84dvh, 760px);
+  }
+}
