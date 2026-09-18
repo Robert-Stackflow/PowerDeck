@@ -369,6 +369,12 @@ export async function createApp({
           if (method === "PUT")
             return json(res, 200, store.save(id, await readJSON(req)));
         }
+        if (parts[3] === "notes" && parts[4] && method === "PATCH")
+          return json(
+            res,
+            200,
+            store.updateNote(id, parts[4], await readJSON(req, 131072)),
+          );
         if (parts[3] === "revisions") {
           if (parts.length === 4 && method === "GET")
             return json(res, 200, { revisions: store.revisions(id) });

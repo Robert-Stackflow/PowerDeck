@@ -15,6 +15,7 @@ export function mountPresenter({
   editURL = null,
   presenterURL = null,
   downloadURL = null,
+  saveNote = null,
   syncHash = true,
   storage = hostWindow.localStorage,
 }) {
@@ -580,16 +581,85 @@ export function mountPresenter({
   function renderNotes() {
     if (!allowNotes || notesPage === current) return;
     notesPage = current;
-    const d = data[current];
+    const d =
+      data[current] ||
+      (data[current] = {
+        title: `第 ${current} 页`,
+        notes: "",
+        refs: [],
+        figures: [],
+      });
     $("notesTitle").textContent = "备注";
     $("notesBody").replaceChildren();
     const title = document.createElement("p");
     title.className = "note-slide-title";
     title.textContent = String(current).padStart(2, "0") + " · " + d.title;
     $("notesBody").append(title);
-    const p = document.createElement("p");
-    p.textContent = d.notes;
-    $("notesBody").append(p);
+    if (saveNote) {
+      const editor = document.createElement("div"),
+        textarea = document.createElement("textarea"),
+        actions = document.createElement("div"),
+        status = document.createElement("span"),
+        button = document.createElement("button");
+      let saving = false;
+      editor.className = "note-editor";
+      textarea.value = d.notes || "";
+      textarea.maxLength = 30000;
+      textarea.rows = 8;
+      textarea.setAttribute("aria-label", "当前页备注");
+      textarea.placeholder = "添加当前页的演讲备注…";
+      actions.className = "note-editor-actions";
+      status.className = "note-save-status";
+      status.setAttribute("role", "status");
+      status.textContent = "修改后保存到当前页";
+      button.type = "button";
+      button.className = "note-save-button";
+      button.innerHTML = ico("save") + "保存备注";
+      button.disabled = true;
+      textarea.oninput = () => {
+        d.notes = textarea.value;
+        status.textContent = "尚未保存";
+        button.disabled = saving;
+      };
+      const persist = async () => {
+        if (saving || button.disabled) return;
+        const page = current,
+          value = textarea.value;
+        saving = true;
+        button.disabled = true;
+        status.textContent = "保存中…";
+        try {
+          await saveNote(page, value);
+          presenterChannel?.postMessage({ type: "notes", page, notes: value });
+          if (d.notes === value) status.textContent = "已保存";
+          else {
+            status.textContent = "有新的修改尚未保存";
+            button.disabled = false;
+          }
+        } catch (error) {
+          status.textContent = "保存失败";
+          button.disabled = false;
+          toast(error.message);
+        } finally {
+          saving = false;
+          if (d.notes !== value) button.disabled = false;
+        }
+      };
+      button.onclick = persist;
+      textarea.onkeydown = (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          event.preventDefault();
+          persist();
+        }
+      };
+      actions.append(status, button);
+      editor.append(textarea, actions);
+      $("notesBody").append(editor);
+    } else {
+      const p = document.createElement("p");
+      p.textContent = d.notes;
+      $("notesBody").append(p);
+    }
     if (d.figures?.length) {
       const gallery = document.createElement("div");
       gallery.className = "note-figures";

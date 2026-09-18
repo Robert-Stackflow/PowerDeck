@@ -253,6 +253,34 @@ export function createStore(dataDir, seedDir) {
     }
     return get(id);
   }
+  function updateNote(id, page, input) {
+    const current = get(id),
+      pageNumber = Number.parseInt(page, 10);
+    requireValue(
+      Number.isInteger(pageNumber) &&
+        pageNumber >= 1 &&
+        pageNumber <= current.slideCount,
+      "页面编号不正确",
+    );
+    requireValue(
+      input.version === current.version,
+      "演示稿已被更新，请刷新后重试",
+    );
+    requireValue(
+      typeof input.notes === "string" && input.notes.length <= 30000,
+      "备注需小于 30000 个字符",
+    );
+    const value = content(id);
+    value.notes[pageNumber] = {
+      ...(value.notes[pageNumber] || {
+        title: `第 ${pageNumber} 页`,
+        refs: [],
+        figures: [],
+      }),
+      notes: input.notes,
+    };
+    return save(id, { ...value, version: current.version });
+  }
   const revisions = (id) => {
     const current = raw(id);
     if (!current || current.deleted_at)
@@ -575,6 +603,7 @@ export function createStore(dataDir, seedDir) {
     clone,
     importPackage,
     save,
+    updateNote,
     revisions,
     revisionContent,
     restoreRevision,

@@ -1043,6 +1043,61 @@ body.context-open #progress {
 #notesBody a {
   font-size: 15px;
 }
+.note-editor {
+  display: grid;
+  gap: 11px;
+  margin-bottom: 22px;
+}
+.note-editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 190px;
+  resize: vertical;
+  padding: 14px 15px;
+  border: 1px solid #cfd6de;
+  border-radius: 12px;
+  background: #fff;
+  color: #34445a;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.75;
+  outline: none;
+}
+.note-editor textarea:focus {
+  border-color: #7898bc;
+  box-shadow: 0 0 0 3px #7898bc1f;
+}
+.note-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.note-save-status {
+  color: #7d8898;
+  font-size: 12px;
+}
+.note-save-button {
+  min-height: 38px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #496f62;
+  border-radius: 10px;
+  background: #35695a;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+}
+.note-save-button:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+.note-save-button svg {
+  width: 17px;
+  height: 17px;
+}
 #overview .help {
   font-size: 12px;
   margin-top: 24px;

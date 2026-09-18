@@ -176,6 +176,12 @@ try {
   let pendingStatePage = null,
     stateFrame = 0;
   channel.onmessage = ({ data }) => {
+    if (data?.type === "notes") {
+      const note = noteAt(data.page);
+      content.notes[data.page] = { ...note, notes: data.notes };
+      if (data.page === current) render();
+      return;
+    }
     if (data?.type !== "state") return;
     connected = true;
     lastStateAt = performance.now();

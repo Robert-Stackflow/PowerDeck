@@ -88,6 +88,27 @@ try {
               : null,
           downloadURL:
             shared && meta.allowDownload ? prefix + "/export?format=pdf" : null,
+          saveNote:
+            account.authenticated && !shared && !revision
+              ? async (page, notes) => {
+                  const response = await fetch(
+                    `${prefix}/notes/${encodeURIComponent(page)}`,
+                    {
+                      method: "PATCH",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-Token": account.csrf,
+                      },
+                      body: JSON.stringify({ notes, version: meta.version }),
+                    },
+                  );
+                  const value = await response.json();
+                  if (!response.ok)
+                    throw new Error(value.error || "备注保存失败");
+                  meta.version = value.version;
+                  return value;
+                }
+              : null,
         });
         await frame.contentDocument.fonts.ready;
         await new Promise((resolve) =>
