@@ -88,7 +88,8 @@ function render() {
     });
   root.querySelector("#questionForm").onsubmit = async (event) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget),
+    const formElement = event.currentTarget,
+      form = new FormData(formElement),
       button = event.submitter;
     button.disabled = true;
     try {
@@ -96,7 +97,7 @@ function render() {
         method: "POST",
         body: { name: form.get("name"), body: form.get("body") },
       });
-      event.currentTarget.reset();
+      formElement.reset();
       message = "问题已发送给演讲者";
     } catch (error) {
       message = error.message;

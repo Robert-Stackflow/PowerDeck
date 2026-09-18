@@ -1391,44 +1391,43 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .session-divider {
   flex: none;
 }
-#controls .session-control-group button {
-  width: 39px;
-  min-width: 39px;
-  height: 38px;
-}
 .session-overlay {
   position: fixed;
-  inset: 0;
+  inset: auto;
+  top: 50%;
+  left: 50%;
   z-index: 55;
-  display: grid;
-  place-items: center;
-  padding: max(22px, env(safe-area-inset-top))
-    max(22px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom))
-    max(22px, env(safe-area-inset-left));
+  width: min(680px, calc(100vw - 64px));
+  max-height: calc(100dvh - 76px);
+  padding: 27px 30px 25px;
   overflow: auto;
   color: #20362f;
-  animation: dialog-in 0.22s cubic-bezier(0.18, 0.72, 0.22, 1) both;
-  pointer-events: none;
-}
-.session-dialog-card {
-  position: relative;
-  width: min(680px, calc(100vw - 44px));
-  max-height: calc(100dvh - 44px);
-  overflow: auto;
-  padding: 30px;
+  background: #fcfaf6;
   border: 1px solid #ffffffb0;
   border-radius: 22px;
-  background: #fcfaf6;
   box-shadow:
     0 26px 90px #0b19294a,
     0 2px 9px #192a4014;
+  transform: translate(-50%, -50%);
+  animation: dialog-in 0.22s cubic-bezier(0.18, 0.72, 0.22, 1) both;
   scrollbar-width: thin;
-  scrollbar-color: #aeb9b3 transparent;
+  scrollbar-color: #bec7d2 transparent;
   overscroll-behavior: contain;
   pointer-events: auto;
 }
-.audience-session-card {
-  width: min(920px, calc(100vw - 44px));
+#audiencePanel {
+  width: min(920px, calc(100vw - 64px));
+}
+.session-dialog-card {
+  width: 100%;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: auto;
 }
 .session-link svg {
   width: 17px;
@@ -1436,9 +1435,9 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .session-dialog-card > .overlay-head {
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #dce4df;
+  gap: 20px;
+  margin-bottom: 23px;
+  padding-bottom: 18px;
 }
 .session-dialog-card > .overlay-head > div {
   display: grid;
@@ -1453,19 +1452,14 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .session-dialog-card > .overlay-head h2 {
   margin: 0;
-  color: #20362f;
-  font-size: 23px;
-  line-height: 1.35;
+  color: #223a59;
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.4;
 }
 .session-dialog-card > .overlay-head span {
   color: #77877f;
   font-size: 13px;
-}
-.session-dialog-card > .overlay-head .dialog-close {
-  flex: none;
-  background: #f0f3f1;
-  border-color: #dce2df;
-  color: #71817a;
 }
 .session-loading,
 .session-error,
@@ -1504,6 +1498,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   gap: 9px;
 }
 .session-qr-frame {
+  appearance: none;
   position: relative;
   width: 184px;
   height: 184px;
@@ -1512,6 +1507,18 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   border-radius: 18px;
   background: white;
   box-shadow: 0 10px 28px #24423714;
+  cursor: zoom-in;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.session-qr-frame:hover {
+  box-shadow: 0 14px 34px #24423720;
+  transform: translateY(-2px);
+}
+.session-qr-frame:focus-visible {
+  outline: 2px solid #759bca;
+  outline-offset: 4px;
 }
 .session-qr-frame::before,
 .session-qr-frame::after {
@@ -1660,17 +1667,23 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   gap: 12px;
   margin-bottom: 10px;
 }
+.connection-heading > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
 .session-connections h3,
 .session-connections p {
   margin: 0;
 }
 .session-connections h3 {
   font-size: 13px;
+  line-height: 1.3;
 }
 .connection-heading p {
-  margin-top: 4px;
   color: #87948e;
   font-size: 10px;
+  line-height: 1.35;
 }
 .connection-heading > span {
   padding: 5px 8px;
@@ -1682,6 +1695,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .connection-list {
   display: grid;
+  gap: 6px;
   max-height: 184px;
   overflow: auto;
   scrollbar-width: thin;
@@ -1692,11 +1706,11 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 58px;
-  border-top: 1px solid #e8ecea;
-}
-.connection-list article:first-child {
-  border-top: 0;
+  min-height: 56px;
+  padding: 7px 8px;
+  border: 1px solid #e4eae6;
+  border-radius: 10px;
+  background: #f8faf8;
 }
 .connection-device-icon {
   display: grid;
@@ -1712,12 +1726,13 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .connection-list article > div {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 .connection-list article b {
   color: #314b42;
   font-size: 11px;
+  line-height: 1.3;
 }
 .connection-list article small,
 .connection-list article em {
@@ -1725,6 +1740,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   color: #89958f;
   font-size: 9px;
   font-style: normal;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1952,22 +1968,24 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   .session-control-group {
     margin: 0 2px;
   }
-  #controls .session-control-group button {
-    width: 38px;
-    min-width: 38px;
-  }
   .session-overlay {
-    padding: max(12px, env(safe-area-inset-top))
-      max(12px, env(safe-area-inset-right))
-      max(12px, env(safe-area-inset-bottom))
-      max(12px, env(safe-area-inset-left));
+    inset: auto 0 0;
+    width: 100%;
+    max-height: min(82dvh, 720px);
+    padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+    border-width: 1px 0 0;
+    border-radius: 22px 22px 0 0;
+    transform: none;
   }
-  .session-dialog-card,
-  .audience-session-card {
-    width: calc(100vw - 24px);
-    max-height: calc(100dvh - 24px);
-    padding: 22px 18px;
-    border-radius: 18px;
+  #audiencePanel {
+    width: 100%;
+  }
+  .session-dialog-card > .overlay-head {
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+  }
+  .session-dialog-card > .overlay-head h2 {
+    font-size: 21px;
   }
   .session-connect,
   .audience-connect,
@@ -1980,6 +1998,14 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   }
   .audience-dashboard-grid {
     grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .session-overlay,
+  .session-overlay.closing,
+  .session-qr-frame {
+    animation: none;
+    transition: none;
   }
 }
 @media print {
