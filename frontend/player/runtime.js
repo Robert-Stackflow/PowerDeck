@@ -506,7 +506,7 @@ export function mountPresenter({
     (presenterURL
       ? `<section id="remoteControlPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="session-dialog-card remote-session-card"><div class="overlay-head"><div><p class="session-kicker">演讲辅助</p><h2 id="remoteControlTitle">手机遥控</h2><span>扫码连接后即可控制演示</span></div><button class="dialog-close" type="button" data-close="remoteControlPanel" aria-label="关闭手机遥控">${ico("close")}</button></div><div id="remoteSessionBody" class="session-loading">正在创建遥控会话…</div></div></section><section id="roomPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="roomTitle"><div class="session-dialog-card room-session-card"><div class="overlay-head"><div><p class="session-kicker">同步放映</p><h2 id="roomTitle">房间</h2><span>让观众同步观看当前演示</span></div><button class="dialog-close" type="button" data-close="roomPanel" aria-label="关闭房间">${ico("close")}</button></div><div id="roomBody" class="session-loading">正在创建房间…</div></div></section><section id="audiencePanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="audienceTitle"><div class="session-dialog-card audience-session-card"><div class="overlay-head"><div><p class="session-kicker">房间互动</p><h2 id="audienceTitle">观众互动</h2><span>评论、投票、评分</span></div><button class="dialog-close" type="button" data-close="audiencePanel" aria-label="关闭观众互动">${ico("close")}</button></div><div id="audienceSetup" class="session-loading">正在开启观众互动…</div><div id="audienceDashboard" hidden></div></div></section>`
       : viewerMode
-        ? `<section id="roomPollPanel" class="room-poll-popover" hidden aria-label="现场投票"><div class="room-poll-popover-head"><div><b>现场投票</b><span>点击选项即可提交</span></div><button type="button" data-close-room-polls aria-label="关闭投票">${ico("close")}</button></div><div id="roomPollBody"></div></section><div id="roomRatingPopover" class="room-rating-popover" hidden></div>`
+        ? `<section id="roomPollPanel" class="room-poll-popover" hidden aria-label="投票"><div class="room-poll-popover-head"><div><b>投票</b></div><button type="button" data-close-room-polls aria-label="关闭投票">${ico("close")}</button></div><div id="roomPollBody"></div></section><div id="roomRatingPopover" class="room-rating-popover" hidden></div>`
         : "");
   document.body.append(ui);
   bindRoomFeedComposer();
@@ -1672,10 +1672,26 @@ export function mountPresenter({
     return `<section class="room-tab-section room-comments"><header class="room-tab-heading"><div><span>互动记录</span><h3>现场评论</h3></div><em>${comments.length} 条</em></header><div class="room-comment-list">${
       comments.length
         ? [...comments]
-            .map(
-              (comment) =>
-                `<article><b>${escapeHTML(comment.name || "匿名观众")}${comment.authorRole === "host" ? "<i>房主</i>" : comment.authorRole === "system" ? "<i>系统</i>" : ""}</b><p>${escapeHTML(comment.body)}</p></article>`,
-            )
+            .map((comment) => {
+              const role = ["host", "system"].includes(comment.authorRole)
+                  ? comment.authorRole
+                  : "audience",
+                roleLabel =
+                  role === "host"
+                    ? "房主"
+                    : role === "system"
+                      ? "系统"
+                      : "参与者",
+                displayName =
+                  role === "system" ? "PowerDeck" : comment.name || "匿名观众",
+                time = Number(comment.createdAt)
+                  ? new Date(comment.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "";
+              return `<article class="room-comment-item is-${role}"><span class="room-comment-avatar">${ico(role === "system" ? "room" : role === "host" ? "presenter" : "audience")}</span><div class="room-comment-content"><header><div><b>${escapeHTML(displayName)}</b><i>${roleLabel}</i></div>${time ? `<time>${escapeHTML(time)}</time>` : ""}</header><p>${escapeHTML(comment.body)}</p></div></article>`;
+            })
             .join("")
         : '<p class="session-empty">还没有收到评论</p>'
     }</div></section>`;
@@ -2143,7 +2159,7 @@ export function mountPresenter({
       startAudiencePolling();
     } else startAudience();
   }
-  function renderRoomPollDialog(message = "", messagePollId = "") {
+  function renderRoomPollDialog() {
     const body = $("roomPollBody"),
       polls =
         roomAudienceState?.polls ||
@@ -2157,15 +2173,7 @@ export function mountPresenter({
         const submitted =
             hostWindow.sessionStorage.getItem(audienceVoteKey(poll.id)) === "1",
           showResults = poll.status !== "open" || submitted,
-          total = poll.votes || 0,
-          statusText =
-            messagePollId === poll.id && message
-              ? message
-              : submitted
-                ? "已完成投票，结果会实时更新"
-                : poll.status === "closed"
-                  ? "该投票已结束"
-                  : "点击任意选项即可提交";
+          total = poll.votes || 0;
         return `<article class="room-poll-card ${poll.status === "open" ? "is-open" : "is-closed"}"><div class="room-poll-card-top"><span class="room-poll-state">${poll.status === "open" ? "正在投票" : "已结束"}</span><span class="room-poll-participants">${total} 人参与</span></div><h3 class="room-poll-question">${escapeHTML(poll.question)}</h3><div class="room-poll-card-options">${poll.options
           .map((option, index) => {
             const percent = total
@@ -2173,9 +2181,7 @@ export function mountPresenter({
               : 0;
             return `<button type="button" data-instant-room-vote="${index}" data-poll-id="${poll.id}" ${showResults ? "disabled" : ""}>${showResults ? `<i style="width:${percent}%"></i>` : ""}<span>${escapeHTML(option.label)}</span>${showResults ? `<b>${percent}%</b>` : "<em></em>"}</button>`;
           })
-          .join(
-            "",
-          )}</div><p class="room-poll-hint">${escapeHTML(statusText)}</p></article>`;
+          .join("")}</div></article>`;
       },
       sections = [
         ["待参与", polls.filter((poll) => poll.status === "open")],
@@ -2207,9 +2213,10 @@ export function mountPresenter({
           });
           hostWindow.sessionStorage.setItem(audienceVoteKey(pollId), "1");
           updateRoomPollBadge(roomAudienceState.polls || []);
-          renderRoomPollDialog("投票已提交", pollId);
+          renderRoomPollDialog();
         } catch (error) {
-          renderRoomPollDialog(error.message, pollId);
+          renderRoomPollDialog();
+          toast(error.message);
         }
       };
     });
