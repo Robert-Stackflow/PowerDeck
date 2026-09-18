@@ -31,6 +31,7 @@ const names = {
   presenter: "Monitor",
   smartphone: "Smartphone",
   audience: "MessageSquare",
+  room: "RadioTower",
   flag: "Flag",
 };
 const escape = (s) =>

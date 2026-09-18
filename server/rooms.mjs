@@ -80,16 +80,21 @@ export function createRooms(store, publicURL = "") {
       if (!role || client.role === role) send(client, message);
   }
 
-  function participantsChanged(room) {
+  function participantsChanged(room, activity = null) {
     const connections = connectionList(room);
     broadcast(
       room,
-      { type: "participants", count: connections.length, connections },
+      {
+        type: "participants",
+        count: connections.length,
+        connections,
+        activity,
+      },
       "host",
     );
     broadcast(
       room,
-      { type: "participants", count: connections.length },
+      { type: "participants", count: connections.length, activity },
       "viewer",
     );
   }
@@ -275,7 +280,17 @@ export function createRooms(store, publicURL = "") {
       role,
       state: role === "host" ? adminState(room) : publicState(room),
     });
-    participantsChanged(room);
+    participantsChanged(
+      room,
+      role === "viewer"
+        ? {
+            id: crypto.randomUUID(),
+            action: "joined",
+            name: admitted.name,
+            at: Date.now(),
+          }
+        : null,
+    );
 
     ws.on("message", (raw) => {
       if (raw.length > 2 * 1024 * 1024) return;
@@ -303,6 +318,14 @@ export function createRooms(store, publicURL = "") {
                 page: clampPage(point.page, room.total),
                 x: Math.max(0, Math.min(1, point.x)),
                 y: Math.max(0, Math.min(1, point.y)),
+                tool: ["pointer", "laser", "pen", "highlighter"].includes(
+                  point.tool,
+                )
+                  ? point.tool
+                  : "pointer",
+                color: /^#[\da-f]{6}$/i.test(String(point.color || ""))
+                  ? point.color
+                  : "#ff3b30",
                 visible: point.visible !== false,
               }
             : null;
@@ -321,7 +344,17 @@ export function createRooms(store, publicURL = "") {
     });
     ws.on("close", () => {
       room.clients.delete(client);
-      participantsChanged(room);
+      participantsChanged(
+        room,
+        client.role === "viewer"
+          ? {
+              id: crypto.randomUUID(),
+              action: "left",
+              name: client.connection.name || "一位观众",
+              at: Date.now(),
+            }
+          : null,
+      );
     });
   }
 

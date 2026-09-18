@@ -188,7 +188,7 @@ export function createPlatform(store, dataDir, publicURL) {
       questions = admin
         ? db
             .prepare(
-              "SELECT id,name,body,author_role AS authorRole,answered,created_at AS createdAt FROM audience_questions WHERE session_token=? ORDER BY answered,created_at DESC",
+              "SELECT id,name,body,author_role AS authorRole,answered,created_at AS createdAt FROM audience_questions WHERE session_token=? ORDER BY created_at DESC",
             )
             .all(token)
             .map((item) => ({ ...item, answered: !!item.answered }))
@@ -260,19 +260,25 @@ export function createPlatform(store, dataDir, publicURL) {
     const body = String(input.body || "").trim(),
       name = String(input.name || "匿名观众")
         .trim()
-        .slice(0, 40);
+        .slice(0, 40),
+      role = ["host", "system"].includes(authorRole) ? authorRole : "audience";
     requireValue(
       body.length >= 1 && body.length <= 500,
       "评论需为 1–500 个字符",
     );
     db.prepare(
-      "INSERT INTO audience_questions(id,session_token,name,body,author_role,created_at) VALUES(?,?,?,?,?,?)",
+      "INSERT INTO audience_questions(id,session_token,name,body,author_role,answered,created_at) VALUES(?,?,?,?,?,?,?)",
     ).run(
       crypto.randomUUID(),
       token,
-      authorRole === "host" ? "房主" : name || "匿名观众",
+      role === "host"
+        ? "房主"
+        : role === "system"
+          ? "系统"
+          : name || "匿名观众",
       body,
-      authorRole === "host" ? "host" : "audience",
+      role,
+      role === "system" ? 1 : 0,
       Date.now(),
     );
     return { ok: true };

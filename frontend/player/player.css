@@ -2037,25 +2037,47 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 #roomPointer {
   position: fixed;
   z-index: 44;
-  width: 18px;
-  height: 18px;
-  border: 3px solid white;
-  border-radius: 50%;
-  background: #ef4b4b;
-  box-shadow:
-    0 3px 14px #0008,
-    0 0 0 3px #ef4b4b55;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--room-pointer-color, #ff3b30);
+  filter: drop-shadow(0 3px 5px #0008);
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, -50%) scale(0.65);
+  transform: translate(-3px, -3px) scale(0.72);
   transition:
     left 0.06s linear,
     top 0.06s linear,
     opacity 0.16s ease,
     transform 0.16s ease;
 }
+#roomPointer svg {
+  width: 25px;
+  height: 25px;
+  fill: #fff;
+  stroke-width: 2;
+}
+#roomPointer[data-tool="pen"] svg,
+#roomPointer[data-tool="highlighter"] svg {
+  width: 24px;
+  height: 24px;
+  fill: #101820;
+}
+#roomPointer[data-tool="laser"] {
+  width: 16px;
+  height: 16px;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: var(--room-pointer-color, #ff3b30);
+  box-shadow: 0 0 0 4px
+    color-mix(in srgb, var(--room-pointer-color) 35%, transparent);
+}
 #roomPointer.visible {
   opacity: 1;
+  transform: translate(-3px, -3px) scale(1);
+}
+#roomPointer[data-tool="laser"].visible {
   transform: translate(-50%, -50%) scale(1);
 }
 .room-online {
@@ -2097,6 +2119,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   width: min(370px, calc(100vw - 44px));
   max-height: min(46vh, 480px);
   overflow: hidden;
+  background: transparent !important;
   color: #edf6f1;
   pointer-events: none;
 }
@@ -2105,9 +2128,9 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   gap: 8px;
   align-content: end;
   max-height: min(46vh, 480px);
-  padding: 28px 0 2px;
+  padding: 0;
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, transparent, #000 24px, #000);
+  background: transparent;
 }
 #roomFeedItems > p {
   margin: 0;
@@ -2122,9 +2145,9 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   padding: 9px 12px;
   border: 1px solid #ffffff12;
   border-radius: 6px 15px 15px 15px;
-  background: #101820b8;
+  background: linear-gradient(135deg, #101820d6, #101820a6);
   color: inherit;
-  box-shadow: 0 8px 24px #0003;
+  box-shadow: 0 5px 18px #0002;
   backdrop-filter: blur(14px) saturate(1.2);
   animation: room-comment-in 0.22s ease-out both;
 }
@@ -2148,7 +2171,36 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 #roomFeedItems article.is-host {
   border-color: #6fd5aa2c;
-  background: #173b2ea8;
+  background: linear-gradient(135deg, #173b2ed4, #173b2e9c);
+}
+#roomFeedItems article.is-system {
+  border-color: #82a8ce2b;
+  background: linear-gradient(135deg, #172b3ed1, #172b3e91);
+}
+#roomFeedItems article.is-system b {
+  color: #a9c9e8;
+}
+.room-feed-activity {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #0b12179c;
+  color: #aebbb5;
+  backdrop-filter: blur(12px);
+  font-size: 10px;
+  animation: room-comment-in 0.22s ease-out both;
+}
+.room-feed-activity svg {
+  width: 11px;
+  height: 11px;
+  color: #72cda6;
+}
+.room-feed-activity b {
+  margin-right: 4px;
+  color: #e1ebe6;
 }
 #roomFeedItems article p {
   margin: 0;
@@ -2275,6 +2327,11 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .room-interaction-overlay .session-dialog-card {
   width: min(620px, calc(100vw - 48px));
   height: min(650px, calc(100dvh - 64px));
+  display: flex;
+  flex-direction: column;
+}
+.room-interaction-overlay .overlay-head {
+  flex: none;
 }
 #roomPollPanel .session-dialog-card {
   width: min(760px, calc(100vw - 48px));
@@ -2288,12 +2345,220 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   width: min(480px, calc(100vw - 48px));
   height: min(440px, calc(100dvh - 64px));
 }
-.room-interaction-overlay iframe {
-  width: 100%;
-  height: calc(100% - 66px);
-  border: 0;
-  border-radius: 0 0 16px 16px;
-  background: #f3f6f4;
+.native-interaction-body {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.native-interaction-empty {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  color: #819087;
+  text-align: center;
+}
+.native-interaction-empty svg {
+  width: 34px;
+  height: 34px;
+  color: #78a894;
+}
+.native-interaction-empty h3,
+.native-interaction-empty p {
+  margin: 0;
+}
+.native-interaction-empty h3 {
+  color: #30483e;
+  font-size: 16px;
+}
+.native-interaction-empty p {
+  font-size: 11px;
+}
+.native-poll,
+.native-rating,
+.native-comment-form {
+  display: grid;
+  gap: 16px;
+}
+.native-poll-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.native-poll-heading small {
+  color: #89968f;
+  font-size: 10px;
+}
+.native-poll h3 {
+  margin: 0;
+  color: #213a30;
+  font-size: 19px;
+  line-height: 1.5;
+}
+.native-poll-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.native-poll-options button {
+  position: relative;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  padding: 0 14px;
+  border: 1px solid #d9e1dd;
+  border-radius: 12px;
+  background: #f6f8f7;
+  color: #344b41;
+  text-align: left;
+  cursor: pointer;
+}
+.native-poll-options button.selected {
+  border-color: #4e9677;
+  background: #eaf4ef;
+  box-shadow: 0 0 0 3px #4e967718;
+}
+.native-poll-options button i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #69aa8b26;
+}
+.native-poll-options button span,
+.native-poll-options button b,
+.native-poll-options button em {
+  position: relative;
+  z-index: 1;
+}
+.native-poll-options button span {
+  flex: 1;
+}
+.native-poll-options button b {
+  color: #3f8064;
+  font-size: 11px;
+}
+.native-poll-options button em {
+  width: 17px;
+  height: 17px;
+  border: 1px solid #9aaba2;
+  border-radius: 50%;
+}
+.native-poll-options button.selected em {
+  border: 5px solid #4f9476;
+  background: #fff;
+}
+.native-interaction-primary {
+  min-height: 44px;
+  border: 1px solid #34775d;
+  border-radius: 11px;
+  background: #34775d;
+  color: white;
+  cursor: pointer;
+}
+.native-interaction-primary:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.native-interaction-message {
+  min-height: 17px;
+  margin: 0;
+  color: #71827a;
+  text-align: center;
+  font-size: 10px;
+}
+.native-comment-author {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: #eef4f1;
+  color: #39745d;
+}
+.native-comment-author svg {
+  width: 20px;
+}
+.native-comment-author span {
+  display: grid;
+  gap: 2px;
+}
+.native-comment-author small {
+  color: #89968f;
+  font-size: 9px;
+}
+.native-comment-author b {
+  color: #30483e;
+  font-size: 12px;
+}
+.native-comment-form label {
+  display: grid;
+  gap: 7px;
+  color: #61736b;
+  font-size: 11px;
+}
+.native-comment-form textarea {
+  min-height: 150px;
+  resize: vertical;
+  padding: 13px;
+  border: 1px solid #d5ded9;
+  border-radius: 11px;
+  font: inherit;
+  line-height: 1.65;
+  outline: none;
+}
+.native-comment-form textarea:focus {
+  border-color: #529174;
+  box-shadow: 0 0 0 3px #5291741b;
+}
+.native-rating {
+  align-content: center;
+  min-height: 250px;
+}
+.native-rating-score {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+}
+.native-rating-score b {
+  color: #326c54;
+  font-size: 38px;
+  font-variant-numeric: tabular-nums;
+}
+.native-rating-score span {
+  color: #84928b;
+  font-size: 10px;
+}
+.native-rating-options {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.native-rating-options button {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  border: 1px solid #d9e1dd;
+  border-radius: 13px;
+  background: #f5f8f6;
+  color: #89968f;
+  cursor: pointer;
+}
+.native-rating-options button svg {
+  width: 19px;
+}
+.native-rating-options button span {
+  font-size: 10px;
+}
+.native-rating-options button.selected {
+  border-color: #d5a84f;
+  background: #fff6e4;
+  color: #b27e24;
+  box-shadow: 0 0 0 3px #d5a84f1a;
 }
 .room-viewer #controls {
   min-width: 0;
@@ -2686,6 +2951,9 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   }
   .room-setup-fields fieldset {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .native-poll-options {
+    grid-template-columns: 1fr;
   }
   .room-interaction-overlay .session-dialog-card {
     width: 100%;

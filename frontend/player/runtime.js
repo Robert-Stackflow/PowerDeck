@@ -112,11 +112,37 @@ export function mountPresenter({
     roomPointerTimer = 0,
     roomPingInterval = 0,
     roomLatency = null,
+    roomFeedState = null,
+    roomFeedSignature = "",
+    roomActivities = [],
+    roomAudienceState = null,
+    roomPollChoice = null,
     remoteInterval = 0,
     audienceInterval = 0,
     audienceStarting = false,
     lastRemoteCommand = 0,
     remoteBusy = false;
+  let interactionToken = (() => {
+      try {
+        return interactionURL
+          ? decodeURIComponent(
+              new URL(interactionURL, hostWindow.location.origin).pathname
+                .split("/")
+                .filter(Boolean)
+                .pop() || "",
+            )
+          : "";
+      } catch {
+        return "";
+      }
+    })(),
+    audienceVisitorKey = "powerdeck-audience-visitor",
+    audienceVisitor =
+      localStorage.getItem(audienceVisitorKey) ||
+      hostWindow.crypto.randomUUID();
+  const audienceVoteKey = () => `voted:${interactionToken}`,
+    audienceRatingKey = () => `rating:${interactionToken}`;
+  localStorage.setItem(audienceVisitorKey, audienceVisitor);
   const sessionRequest = async (path, options = {}) => {
     const response = await hostWindow.fetch("/api" + path, {
       method: options.method || "GET",
@@ -133,6 +159,24 @@ export function mountPresenter({
     });
     const value = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(value.error || "请求失败");
+    return value;
+  };
+  const roomAudienceRequest = async (path = "", options = {}) => {
+    if (!interactionToken) throw new Error("房间未开启互动");
+    const response = await hostWindow.fetch(
+      `/api/audience/${encodeURIComponent(interactionToken)}${path}`,
+      {
+        method: options.method || "GET",
+        credentials: "same-origin",
+        headers: {
+          "X-PowerDeck-Device": audienceVisitor,
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+        },
+        ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+      },
+    );
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(value.error || "互动请求失败");
     return value;
   };
   const escapeHTML = (value) =>
@@ -312,7 +356,7 @@ export function mountPresenter({
   const dockButton = (id, icon, label, extra = "") =>
     `<button id="${id}" type="button" aria-label="${label}" data-tip="${label}" ${extra}>${ico(icon)}</button>`;
   const sessionToolsMarkup = presenterURL
-    ? `<span class="nav-divider session-divider" aria-hidden="true"></span><div class="session-control-group" role="group" aria-label="演讲辅助">${dockButton("presenterViewBtn", "presenter", "演讲者视图")}${dockButton("remoteControlBtn", "smartphone", "手机遥控")}${dockButton("roomBtn", "audience", "房间")}</div>`
+    ? `<span class="nav-divider session-divider" aria-hidden="true"></span><div class="session-control-group" role="group" aria-label="演讲辅助">${dockButton("presenterViewBtn", "presenter", "演讲者视图")}${dockButton("remoteControlBtn", "smartphone", "手机遥控")}${dockButton("roomBtn", "room", "房间")}</div>`
     : "";
   dock.innerHTML =
     '<div id="dockTools" class="dock-tools">' +
@@ -389,26 +433,10 @@ export function mountPresenter({
       : "") +
     (presenterURL
       ? `<section id="remoteControlPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="session-dialog-card remote-session-card"><div class="overlay-head"><div><p class="session-kicker">演讲辅助</p><h2 id="remoteControlTitle">手机遥控</h2><span>扫码连接后即可控制演示</span></div><button class="dialog-close" type="button" data-close="remoteControlPanel" aria-label="关闭手机遥控">${ico("close")}</button></div><div id="remoteSessionBody" class="session-loading">正在创建遥控会话…</div></div></section><section id="roomPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="roomTitle"><div class="session-dialog-card room-session-card"><div class="overlay-head"><div><p class="session-kicker">同步放映</p><h2 id="roomTitle">房间</h2><span>让观众同步观看当前演示</span></div><button class="dialog-close" type="button" data-close="roomPanel" aria-label="关闭房间">${ico("close")}</button></div><div id="roomBody" class="session-loading">正在创建房间…</div></div></section><section id="audiencePanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="audienceTitle"><div class="session-dialog-card audience-session-card"><div class="overlay-head"><div><p class="session-kicker">房间互动</p><h2 id="audienceTitle">观众互动</h2><span>评论、投票、评分</span></div><button class="dialog-close" type="button" data-close="audiencePanel" aria-label="关闭观众互动">${ico("close")}</button></div><div id="audienceSetup" class="session-loading">正在开启观众互动…</div><div id="audienceDashboard" hidden></div></div></section>`
-      : viewerMode && interactionURL
-        ? `<section id="roomInteractionPanel" class="overlay session-overlay room-interaction-overlay" hidden role="dialog" aria-modal="true" aria-label="房间互动"><div class="session-dialog-card"><div class="overlay-head"><div><p class="session-kicker">房间</p><h2 id="roomInteractionTitle">评论</h2></div><button class="dialog-close" type="button" data-close="roomInteractionPanel" aria-label="关闭互动">${ico("close")}</button></div><iframe data-base-url="${escapeHTML(interactionURL)}" title="房间互动"></iframe></div></section>`
+      : viewerMode
+        ? `<section id="roomPollPanel" class="overlay session-overlay room-interaction-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="roomPollTitle"><div class="session-dialog-card"><div class="overlay-head"><div><p class="session-kicker">房间互动</p><h2 id="roomPollTitle">现场投票</h2><span>选择选项并提交，结果会实时更新</span></div><button class="dialog-close" type="button" data-close="roomPollPanel" aria-label="关闭投票">${ico("close")}</button></div><div id="roomPollBody" class="native-interaction-body"></div></div></section><section id="roomCommentPanel" class="overlay session-overlay room-interaction-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="roomCommentTitle"><div class="session-dialog-card"><div class="overlay-head"><div><p class="session-kicker">房间互动</p><h2 id="roomCommentTitle">发表评论</h2><span>你的评论会显示在演示画面的互动列表中</span></div><button class="dialog-close" type="button" data-close="roomCommentPanel" aria-label="关闭评论">${ico("close")}</button></div><div id="roomCommentBody" class="native-interaction-body"></div></div></section><section id="roomRatingPanel" class="overlay session-overlay room-interaction-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="roomRatingTitle"><div class="session-dialog-card"><div class="overlay-head"><div><p class="session-kicker">房间互动</p><h2 id="roomRatingTitle">演示评分</h2><span>为本次演示体验打分</span></div><button class="dialog-close" type="button" data-close="roomRatingPanel" aria-label="关闭评分">${ico("close")}</button></div><div id="roomRatingBody" class="native-interaction-body"></div></div></section>`
         : "");
   document.body.append(ui);
-  if (viewerMode && interactionURL) {
-    const pollPanel = $("roomInteractionPanel");
-    pollPanel.id = "roomPollPanel";
-    pollPanel.setAttribute("aria-label", "投票");
-    pollPanel.querySelector("[data-close]").dataset.close = "roomPollPanel";
-    $("roomInteractionTitle").id = "roomPollTitle";
-    $("roomPollTitle").textContent = "投票";
-    for (const [id, title] of [
-      ["roomCommentPanel", "评论"],
-      ["roomRatingPanel", "评分"],
-    ])
-      ui.insertAdjacentHTML(
-        "beforeend",
-        `<section id="${id}" class="overlay session-overlay room-interaction-overlay" hidden role="dialog" aria-modal="true" aria-label="${title}"><div class="session-dialog-card"><div class="overlay-head"><div><p class="session-kicker">房间</p><h2>${title}</h2></div><button class="dialog-close" type="button" data-close="${id}" aria-label="关闭${title}">${ico("close")}</button></div><iframe data-base-url="${escapeHTML(interactionURL)}" title="${title}"></iframe></div></section>`,
-      );
-  }
   if (presenterURL)
     ui.insertAdjacentHTML(
       "beforeend",
@@ -532,7 +560,7 @@ export function mountPresenter({
       (allowNotes ? row("notes", "备注", "notes", "N") : "") +
       (presenterURL ? row("presenter", "演讲者视图", "presenter", "") : "") +
       (presenterURL ? row("remote", "手机遥控", "smartphone", "") : "") +
-      (presenterURL ? row("room", "房间", "audience", "") : "") +
+      (presenterURL ? row("room", "房间", "room", "") : "") +
       menuRule +
       row("undo", "撤销墨迹", "undo", "⌘Z", !canUndo) +
       row("redo", "重做墨迹", "redo", "⇧⌘Z", !canRedo) +
@@ -1094,26 +1122,105 @@ export function mountPresenter({
   function renderLiveFeed(feed) {
     const list = $("roomFeedItems");
     if (!list || !feed) return;
-    const poll = feed.poll,
-      comments = feed.comments || [];
-    list.innerHTML = `${poll ? `<button type="button" class="room-feed-poll"><span>${ico("chartNoAxesColumn")}投票</span><b>${escapeHTML(poll.question)}</b><small>${poll.status === "open" ? "点击参与" : "查看结果"} · ${poll.votes || 0} 人</small></button>` : ""}${
-      comments
-        .slice(0, 7)
-        .reverse()
-        .map(
-          (comment) =>
-            `<article class="${comment.authorRole === "host" ? "is-host" : ""}"><b>${escapeHTML(comment.name || "匿名观众")}${comment.authorRole === "host" ? "<em>房主</em>" : ""}</b><p>${escapeHTML(comment.body)}</p></article>`,
-        )
-        .join("") || (!poll ? "<p>互动内容会显示在这里</p>" : "")
-    }`;
-    list.querySelector(".room-feed-poll")?.addEventListener("click", () => {
-      if (viewerMode) openRoomInteraction("poll");
-      else {
-        roomTab = "polls";
-        openPanel("roomPanel");
-        renderRoom();
+    roomFeedState = feed;
+    roomAudienceState = {
+      ...(roomAudienceState || {}),
+      ...(feed.poll !== undefined ? { poll: feed.poll } : {}),
+    };
+    const comments = (feed.comments || []).slice(0, 7).reverse(),
+      activities = roomActivities.slice(-6),
+      signature = JSON.stringify({
+        poll: feed.poll
+          ? [feed.poll.id, feed.poll.status, feed.poll.votes]
+          : null,
+        comments: comments.map((item) => [item.id, item.body, item.authorRole]),
+        activities: activities.map((item) => [item.id, item.action]),
+      });
+    if (signature === roomFeedSignature) return;
+    roomFeedSignature = signature;
+    const existing = new Map(
+        [...list.children].map((node) => [node.dataset.feedKey, node]),
+      ),
+      nodes = [],
+      reuse = (key, tag, className, html) => {
+        const node = existing.get(key) || document.createElement(tag);
+        node.dataset.feedKey = key;
+        node.className = className;
+        if (node.dataset.feedHtml !== html) {
+          node.innerHTML = html;
+          node.dataset.feedHtml = html;
+        }
+        return node;
+      };
+    if (feed.poll) {
+      const poll = feed.poll,
+        node = reuse(
+          `poll:${poll.id}`,
+          "button",
+          "room-feed-poll",
+          `<span>${ico("chartNoAxesColumn")}现场投票</span><b>${escapeHTML(poll.question)}</b><small>${poll.status === "open" ? "点击参与" : "查看结果"} · ${poll.votes || 0} 人</small>`,
+        );
+      node.type = "button";
+      node.onclick = () => {
+        if (viewerMode) openRoomInteraction("poll");
+        else {
+          roomTab = "polls";
+          openPanel("roomPanel");
+          renderRoom();
+        }
+      };
+      nodes.push(node);
+    }
+    const stream = [
+      ...activities.map((value) => ({ type: "activity", value })),
+      ...comments.map((value) => ({ type: "comment", value })),
+    ]
+      .sort(
+        (left, right) =>
+          (left.value.at || left.value.createdAt || 0) -
+          (right.value.at || right.value.createdAt || 0),
+      )
+      .slice(-9);
+    for (const entry of stream) {
+      if (entry.type === "activity") {
+        const activity = entry.value;
+        nodes.push(
+          reuse(
+            `activity:${activity.id}`,
+            "div",
+            "room-feed-activity",
+            `${ico(activity.action === "joined" ? "play" : "close")}<span><b>${escapeHTML(activity.name || "一位观众")}</b>${activity.action === "joined" ? "进入了房间" : "离开了房间"}</span>`,
+          ),
+        );
+      } else {
+        const comment = entry.value;
+        nodes.push(
+          reuse(
+            `comment:${comment.id}`,
+            "article",
+            comment.authorRole === "host"
+              ? "is-host"
+              : comment.authorRole === "system"
+                ? "is-system"
+                : "",
+            `<b>${escapeHTML(comment.name || "匿名观众")}${comment.authorRole === "host" ? "<em>房主</em>" : comment.authorRole === "system" ? "<em>系统</em>" : ""}</b><p>${escapeHTML(comment.body)}</p>`,
+          ),
+        );
       }
-    });
+    }
+    if (!nodes.length)
+      nodes.push(reuse("empty", "p", "", "互动内容会显示在这里"));
+    list.replaceChildren(...nodes);
+    if ($("roomPollPanel") && !$("roomPollPanel").hidden)
+      renderRoomPollDialog();
+  }
+  function pushRoomActivity(activity) {
+    if (!activity?.id || roomActivities.some((item) => item.id === activity.id))
+      return;
+    roomActivities.push(activity);
+    roomActivities = roomActivities.slice(-12);
+    roomFeedSignature = "";
+    renderLiveFeed(roomFeedState || { poll: null, comments: [] });
   }
   function openHostComment() {
     if (!roomSession || !audienceSession) return;
@@ -1163,6 +1270,7 @@ export function mountPresenter({
         if (message.type === "participants") {
           roomSession.connections = message.connections || [];
           updateRoomConnections(roomSession.connections);
+          pushRoomActivity(message.activity);
         } else if (message.type === "pong") {
           roomLatency = Math.max(0, Date.now() - Number(message.at));
           updateRoomPresence(roomSession.connections?.length || 0, roomLatency);
@@ -1207,7 +1315,7 @@ export function mountPresenter({
             .sort((a, b) => Number(a.answered) - Number(b.answered))
             .map(
               (comment) =>
-                `<button type="button" data-room-comment="${comment.id}" class="${comment.answered ? "answered" : ""}"><span><b>${escapeHTML(comment.name || "匿名观众")}${comment.authorRole === "host" ? "<i>房主</i>" : ""}</b>${escapeHTML(comment.body)}</span><em>${comment.answered ? `${ico("check")}已处理` : "标记已处理"}</em></button>`,
+                `<button type="button" data-room-comment="${comment.id}" class="${comment.answered ? "answered" : ""}"><span><b>${escapeHTML(comment.name || "匿名观众")}${comment.authorRole === "host" ? "<i>房主</i>" : comment.authorRole === "system" ? "<i>系统</i>" : ""}</b>${escapeHTML(comment.body)}</span><em>${comment.answered ? `${ico("check")}已处理` : "标记已处理"}</em></button>`,
             )
             .join("")
         : '<p class="session-empty">还没有收到评论</p>'
@@ -1391,7 +1499,7 @@ export function mountPresenter({
   function renderRoomSetup() {
     const body = $("roomBody");
     body.className = "room-setup";
-    body.innerHTML = `<form id="roomSetupForm"><div class="room-setup-intro"><span>${ico("audience")}</span><div><h3>开启房间</h3><p>开启后，观众会同步看到页面、光标和批注。请确认访问权限后再开启。</p></div></div><div class="room-setup-fields"><label>房间密码（可选）<input name="password" type="password" maxlength="128" placeholder="不填写则无需密码"></label><fieldset><legend>默认开放给观众</legend><label><input type="checkbox" name="directory" checked>目录</label><label><input type="checkbox" name="notes">备注</label><label><input type="checkbox" name="interaction" checked>互动</label><label><input type="checkbox" name="downloadPdf">PDF 下载</label><label><input type="checkbox" name="showInteractionFeed" checked>互动浮层</label><label><input type="checkbox" name="showOnlineCount" checked>在线人数</label></fieldset></div><div class="room-setup-actions"><button type="button" data-close="roomPanel">取消</button><button type="submit" class="session-primary">确认开启房间</button></div></form>`;
+    body.innerHTML = `<form id="roomSetupForm"><div class="room-setup-intro"><span>${ico("room")}</span><div><h3>开启房间</h3><p>开启后，观众会同步看到页面、光标和批注。请确认访问权限后再开启。</p></div></div><div class="room-setup-fields"><label>房间密码（可选）<input name="password" type="password" maxlength="128" placeholder="不填写则无需密码"></label><fieldset><legend>默认开放给观众</legend><label><input type="checkbox" name="directory" checked>目录</label><label><input type="checkbox" name="notes">备注</label><label><input type="checkbox" name="interaction" checked>互动</label><label><input type="checkbox" name="downloadPdf">PDF 下载</label><label><input type="checkbox" name="showInteractionFeed" checked>互动浮层</label><label><input type="checkbox" name="showOnlineCount" checked>在线人数</label></fieldset></div><div class="room-setup-actions"><button type="button" data-close="roomPanel">取消</button><button type="submit" class="session-primary">确认开启房间</button></div></form>`;
     body.querySelector("[data-close]").onclick = () => dismissPanel();
     body.querySelector("form").onsubmit = async (event) => {
       event.preventDefault();
@@ -1622,19 +1730,229 @@ export function mountPresenter({
       startAudiencePolling();
     } else startAudience();
   }
-  function openRoomInteraction(mode) {
+  function renderRoomPollDialog(message = "") {
+    const body = $("roomPollBody"),
+      poll = roomAudienceState?.poll,
+      votedPoll = hostWindow.sessionStorage.getItem(audienceVoteKey()),
+      submitted = poll && votedPoll === poll.id,
+      showResults = poll && (poll.status !== "open" || submitted);
+    if (!body) return;
+    if (!poll) {
+      body.innerHTML = `<div class="native-interaction-empty">${ico("chartNoAxesColumn")}<h3>暂时没有投票</h3><p>房主发起投票后会显示在这里。</p></div>`;
+      return;
+    }
+    const total = poll.votes || 0;
+    body.innerHTML = `<div class="native-poll"><div class="native-poll-heading"><span class="session-status ${poll.status === "open" ? "live" : ""}">${poll.status === "open" ? "投票中" : "已结束"}</span><small>${total} 人参与</small></div><h3>${escapeHTML(poll.question)}</h3><div class="native-poll-options">${poll.options
+      .map((option, index) => {
+        const percent = total ? Math.round((option.count / total) * 100) : 0;
+        return `<button type="button" data-room-vote="${index}" class="${roomPollChoice === index ? "selected" : ""}" ${showResults ? "disabled" : ""}>${showResults ? `<i style="width:${percent}%"></i>` : ""}<span>${escapeHTML(option.label)}</span>${showResults ? `<b>${percent}%</b>` : "<em></em>"}</button>`;
+      })
+      .join(
+        "",
+      )}</div>${poll.status === "open" && !submitted ? `<button type="button" class="native-interaction-primary" data-submit-room-vote ${roomPollChoice === null ? "disabled" : ""}>提交选择</button>` : ""}<p class="native-interaction-message">${escapeHTML(message || (submitted ? "已提交，结果会实时更新" : poll.status === "closed" ? "本次投票已经结束" : "请选择一个选项"))}</p></div>`;
+    body.querySelectorAll("[data-room-vote]").forEach(
+      (button) =>
+        (button.onclick = () => {
+          roomPollChoice = Number(button.dataset.roomVote);
+          renderRoomPollDialog();
+        }),
+    );
+    const submit = body.querySelector("[data-submit-room-vote]");
+    if (submit)
+      submit.onclick = async () => {
+        submit.disabled = true;
+        try {
+          roomAudienceState = await roomAudienceRequest("/vote", {
+            method: "POST",
+            body: {
+              pollId: poll.id,
+              option: roomPollChoice,
+              visitor: audienceVisitor,
+            },
+          });
+          hostWindow.sessionStorage.setItem(audienceVoteKey(), poll.id);
+          renderRoomPollDialog("投票已提交");
+        } catch (error) {
+          renderRoomPollDialog(error.message);
+        }
+      };
+  }
+  function renderRoomCommentDialog(message = "") {
+    const body = $("roomCommentBody");
+    if (!body) return;
+    const name = localStorage.getItem("powerdeck-room-name") || "房间观众";
+    body.innerHTML = `<form class="native-comment-form"><div class="native-comment-author">${ico("audience")}<span><small>以此称呼发布</small><b>${escapeHTML(name)}</b></span></div><label>评论内容<textarea name="body" maxlength="500" required placeholder="写下你的想法或问题…"></textarea></label><button type="submit" class="native-interaction-primary">发布评论</button><p class="native-interaction-message">${escapeHTML(message)}</p></form>`;
+    const form = body.querySelector("form");
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const button = event.submitter,
+        value = new FormData(form).get("body");
+      button.disabled = true;
+      try {
+        await roomAudienceRequest("/questions", {
+          method: "POST",
+          body: { name, body: value },
+        });
+        renderRoomCommentDialog("评论已发布");
+        toast("评论已发布");
+      } catch (error) {
+        button.disabled = false;
+        body.querySelector(".native-interaction-message").textContent =
+          error.message;
+      }
+    };
+    form.elements.body.focus({ preventScroll: true });
+  }
+  function renderRoomRatingDialog(message = "") {
+    const body = $("roomRatingBody"),
+      rating = Number(
+        hostWindow.sessionStorage.getItem(audienceRatingKey()) || 0,
+      );
+    if (!body) return;
+    body.innerHTML = `<div class="native-rating"><div class="native-rating-score"><b>${rating || "—"}</b><span>${rating ? "已提交评分" : "选择你的评分"}</span></div><div class="native-rating-options">${[
+      1, 2, 3, 4, 5,
+    ]
+      .map(
+        (number) =>
+          `<button type="button" data-room-rating="${number}" class="${rating === number ? "selected" : ""}" aria-label="${number} 分">${ico("star")}<span>${number}</span></button>`,
+      )
+      .join(
+        "",
+      )}</div><p class="native-interaction-message">${escapeHTML(message || "1 分表示不满意，5 分表示非常满意")}</p></div>`;
+    body.querySelectorAll("[data-room-rating]").forEach(
+      (button) =>
+        (button.onclick = async () => {
+          const value = Number(button.dataset.roomRating);
+          body
+            .querySelectorAll("button")
+            .forEach((item) => (item.disabled = true));
+          try {
+            await roomAudienceRequest("/feedback", {
+              method: "POST",
+              body: { rating: value, visitor: audienceVisitor },
+            });
+            hostWindow.sessionStorage.setItem(
+              audienceRatingKey(),
+              String(value),
+            );
+            renderRoomRatingDialog(`已提交 ${value} 分评价`);
+          } catch (error) {
+            renderRoomRatingDialog(error.message);
+          }
+        }),
+    );
+  }
+  async function openRoomInteraction(mode) {
     const panelIds = {
         poll: "roomPollPanel",
         comments: "roomCommentPanel",
         rating: "roomRatingPanel",
       },
-      panel = $(panelIds[mode]),
-      frame = panel?.querySelector("iframe");
-    if (!panel || !frame) return;
-    const url = new URL(frame.dataset.baseUrl, hostWindow.location.origin);
-    url.searchParams.set("embed", mode);
-    if (frame.src !== url.href) frame.src = url.href;
+      panel = $(panelIds[mode]);
+    if (!panel) return;
     openPanel(panelIds[mode]);
+    if (mode === "comments") {
+      renderRoomCommentDialog();
+      return;
+    }
+    if (mode === "rating") {
+      renderRoomRatingDialog();
+      return;
+    }
+    const body = $("roomPollBody");
+    body.innerHTML = '<div class="session-loading">正在加载投票…</div>';
+    try {
+      roomAudienceState = await roomAudienceRequest();
+      roomPollChoice = null;
+      renderRoomPollDialog();
+    } catch (error) {
+      body.innerHTML = `<div class="native-interaction-empty"><h3>无法加载投票</h3><p>${escapeHTML(error.message)}</p></div>`;
+    }
+  }
+  function syncViewerRoomAccess(nextRoom) {
+    if (!viewerMode || !nextRoom?.permissions) return;
+    const permissions = nextRoom.permissions;
+    Object.assign(viewerPermissions, permissions);
+    allowNotes = !!permissions.notes;
+    if (nextRoom.content?.notes) {
+      for (const key of Object.keys(data)) delete data[key];
+      Object.assign(data, nextRoom.content.notes);
+      const overview = document.querySelector(".overview-list");
+      if (overview)
+        overview.innerHTML = Object.entries(data)
+          .map(
+            ([page, entry]) =>
+              `<button class="toc-item${Number(page) === current ? " current" : ""}" data-goto="${page}"><b>${String(page).padStart(2, "0")}</b><span>${escapeHTML(entry.title)}</span></button>`,
+          )
+          .join("");
+      notesPage = 0;
+      if (!$("notes").hidden && allowNotes) renderNotes();
+    }
+    $("overviewBtn").hidden = !permissions.directory;
+    $("notesBtn").hidden = !permissions.notes;
+    if (!permissions.directory && !$("overview").hidden) dismissPanel();
+    if (!permissions.notes && !$("notes").hidden) dismissPanel();
+
+    interactionURL = nextRoom.interactionURL || interactionURL;
+    if (nextRoom.interactionURL)
+      try {
+        interactionToken = decodeURIComponent(
+          new URL(nextRoom.interactionURL, hostWindow.location.origin).pathname
+            .split("/")
+            .filter(Boolean)
+            .pop() || "",
+        );
+      } catch {}
+    const dockTools = dock.querySelector("#dockTools");
+    if (permissions.interaction && !$("roomPollBtn")) {
+      dockTools.insertAdjacentHTML(
+        "beforeend",
+        '<span class="nav-divider room-interaction-divider" aria-hidden="true"></span><div class="room-interaction-control-group" role="group" aria-label="房间互动">' +
+          dockButton("roomPollBtn", "chartNoAxesColumn", "投票") +
+          dockButton("roomCommentsBtn", "audience", "评论") +
+          dockButton("roomRatingBtn", "star", "评分") +
+          "</div>",
+      );
+      $("roomPollBtn").onclick = () => openRoomInteraction("poll");
+      $("roomCommentsBtn").onclick = () => openRoomInteraction("comments");
+      $("roomRatingBtn").onclick = () => openRoomInteraction("rating");
+    }
+    document
+      .querySelector(".room-interaction-control-group")
+      ?.toggleAttribute("hidden", !permissions.interaction);
+    document
+      .querySelector(".room-interaction-divider")
+      ?.toggleAttribute("hidden", !permissions.interaction);
+    if (!permissions.interaction)
+      for (const id of ["roomPollPanel", "roomCommentPanel", "roomRatingPanel"])
+        if ($(id) && !$(id).hidden) dismissPanel();
+
+    downloadURL = nextRoom.downloadURL || null;
+    if (permissions.downloadPdf && downloadURL && !$("roomDownloadBtn")) {
+      dockTools.insertAdjacentHTML(
+        "beforeend",
+        dockButton("roomDownloadBtn", "print", "下载 PDF"),
+      );
+      $("roomDownloadBtn").onclick = () =>
+        (hostWindow.location.href = downloadURL);
+    }
+    $("roomDownloadBtn")?.toggleAttribute("hidden", !permissions.downloadPdf);
+
+    if (permissions.showOnlineCount && !$("roomOnline"))
+      ui.insertAdjacentHTML(
+        "beforeend",
+        `<div id="roomOnline" class="room-online">${ico("audience")}<b>0 人在线</b><em>连接中</em></div>`,
+      );
+    else if (!permissions.showOnlineCount) $("roomOnline")?.remove();
+    const showFeed = permissions.interaction && permissions.showInteractionFeed;
+    if (showFeed && !$("roomLiveFeed")) {
+      ui.insertAdjacentHTML(
+        "beforeend",
+        '<aside id="roomLiveFeed" class="room-live-feed" aria-live="polite"><div id="roomFeedItems"><p>互动内容会显示在这里</p></div></aside>',
+      );
+      roomFeedSignature = "";
+      renderLiveFeed(roomFeedState || { poll: null, comments: [] });
+    } else if (!showFeed) $("roomLiveFeed")?.remove();
   }
   function act(action) {
     if (action.startsWith("tool:")) {
@@ -2154,7 +2472,13 @@ export function mountPresenter({
       roomSend({
         type: "pointer",
         pointer: inside(point)
-          ? { page: current, x: point[0] / width, y: point[1] / height }
+          ? {
+              page: current,
+              x: point[0] / width,
+              y: point[1] / height,
+              tool,
+              color: inkColors[tool] || inkColors.laser,
+            }
           : null,
       });
     }
@@ -2449,6 +2773,9 @@ export function mountPresenter({
       if (Number.isFinite(state.page)) go(state.page, false);
       this.applyRoomPointer(state.pointer);
     },
+    updateRoomAccess(roomData) {
+      syncViewerRoomAccess(roomData);
+    },
     applyRoomInk(page, strokes) {
       if (!viewerMode || !Number.isInteger(page) || !Array.isArray(strokes))
         return;
@@ -2467,12 +2794,25 @@ export function mountPresenter({
         return;
       }
       const rect = $("deck").getBoundingClientRect();
+      const pointerTool = ["pointer", "laser", "pen", "highlighter"].includes(
+        pointer.tool,
+      )
+        ? pointer.tool
+        : "pointer";
+      if (dot.dataset.tool !== pointerTool) {
+        dot.dataset.tool = pointerTool;
+        dot.innerHTML = pointerTool === "laser" ? "" : ico(pointerTool);
+      }
+      dot.style.setProperty("--room-pointer-color", pointer.color || "#ff3b30");
       dot.style.left = rect.left + pointer.x * rect.width + "px";
       dot.style.top = rect.top + pointer.y * rect.height + "px";
       dot.classList.add("visible");
     },
     updateRoomParticipants(count, latency = null) {
       updateRoomPresence(count, latency);
+    },
+    addRoomActivity(activity) {
+      pushRoomActivity(activity);
     },
     applyRoomFeed(feed) {
       renderLiveFeed(feed);

@@ -4,6 +4,7 @@ import { icons, icon } from "../icons.js";
 import { loadSite, site, setFavicon } from "../branding.js";
 
 const token = location.pathname.split("/").filter(Boolean)[1] || "",
+  apiPrefix = `/api/rooms/${encodeURIComponent(token)}`,
   frame = document.querySelector("#playerFrame"),
   loading = document.querySelector("#loading"),
   status = document.querySelector("#roomStatus"),
@@ -49,6 +50,7 @@ async function ensureJoined(prefix) {
     savedName = localStorage.getItem("powerdeck-room-name") || "";
   passwordField.hidden = !info.passwordProtected;
   passwordInput.required = info.passwordProtected;
+  passwordInput.value = "";
   joinForm.elements.name.value = savedName;
   await new Promise((resolve) => {
     joinForm.onsubmit = async (event) => {
@@ -97,7 +99,7 @@ function fail(error) {
   document.querySelector("#errorMessage").textContent = error.message;
 }
 
-function applyMessage(message) {
+async function applyMessage(message) {
   const presentation = window.presentation;
   if (!presentation) return;
   if (message.type === "snapshot" || message.type === "state") {
@@ -106,8 +108,14 @@ function applyMessage(message) {
       next?.permissions &&
       JSON.stringify(next.permissions) !== JSON.stringify(room.permissions)
     ) {
-      location.reload();
-      return;
+      try {
+        room = await read(apiPrefix);
+        presentation.updateRoomAccess(room);
+        presentation.updateRoomParticipants(participantCount, latency);
+        configureFeed();
+      } catch (error) {
+        if (error.status !== 401) throw error;
+      }
     }
     presentation.applyRoomState(next);
   } else if (message.type === "page") presentation.go(message.page, false);
@@ -115,12 +123,13 @@ function applyMessage(message) {
     presentation.applyRoomPointer(message.pointer);
   else if (message.type === "ink")
     presentation.applyRoomInk(message.page, message.strokes);
-  else if (message.type === "participants")
+  else if (message.type === "participants") {
     presentation.updateRoomParticipants(
       (participantCount = message.count),
       latency,
     );
-  else if (message.type === "pong") {
+    presentation.addRoomActivity(message.activity);
+  } else if (message.type === "pong") {
     latency = Math.max(0, Date.now() - Number(message.at));
     presentation.updateRoomParticipants(participantCount, latency);
   } else if (message.type === "ended") fail(new Error("房主已结束房间"));
@@ -146,14 +155,14 @@ function connect() {
   };
   socket.onmessage = ({ data }) => {
     try {
-      applyMessage(JSON.parse(data));
+      void applyMessage(JSON.parse(data)).catch(() => {});
     } catch {}
   };
   socket.onclose = (event) => {
     clearInterval(pingTimer);
     if (stopped || event.code === 1000) return;
     if (event.code === 1008) {
-      location.reload();
+      void rejoinRoom();
       return;
     }
     setStatus("连接中断，正在重连", "reconnecting");
@@ -162,12 +171,44 @@ function connect() {
   };
 }
 
+function configureFeed() {
+  clearInterval(feedTimer);
+  feedTimer = 0;
+  if (!room?.permissions.interaction || !room.permissions.showInteractionFeed)
+    return;
+  const refreshFeed = async () => {
+    try {
+      window.presentation?.applyRoomFeed(await read(`${apiPrefix}/feed`));
+    } catch {}
+  };
+  void refreshFeed();
+  feedTimer = setInterval(refreshFeed, 1600);
+}
+
+async function rejoinRoom() {
+  clearInterval(feedTimer);
+  setStatus("房间口令已更新，请重新加入", "reconnecting");
+  joinScreen.classList.add("reauth");
+  try {
+    await ensureJoined(apiPrefix);
+    joinScreen.classList.remove("reauth");
+    room = await read(apiPrefix);
+    window.presentation?.updateRoomAccess(room);
+    window.presentation?.applyRoomState(room);
+    window.presentation?.updateRoomParticipants(participantCount, latency);
+    configureFeed();
+    connect();
+  } catch (error) {
+    joinScreen.classList.remove("reauth");
+    fail(error);
+  }
+}
+
 try {
   await loadSite();
-  const prefix = `/api/rooms/${encodeURIComponent(token)}`;
-  await ensureJoined(prefix);
+  await ensureJoined(apiPrefix);
   const [roomData, baseCSS, playerCSS] = await Promise.all([
-    read(prefix),
+    read(apiPrefix),
     fetch("/static/player/base.css").then((response) => response.text()),
     fetch("/static/player/player.css").then((response) => response.text()),
   ]);
@@ -199,18 +240,7 @@ try {
         loading.hidden = true;
         frame.contentDocument.querySelector("#stage").focus();
         connect();
-        if (
-          room.permissions.interaction &&
-          room.permissions.showInteractionFeed
-        ) {
-          const refreshFeed = async () => {
-            try {
-              window.presentation.applyRoomFeed(await read(`${prefix}/feed`));
-            } catch {}
-          };
-          refreshFeed();
-          feedTimer = setInterval(refreshFeed, 1600);
-        }
+        configureFeed();
       } catch (error) {
         fail(error);
       }
@@ -220,7 +250,7 @@ try {
   frame.srcdoc = playerDocument({
     ...room.content,
     meta: room.meta,
-    baseURL: new URL(`${prefix}/files/`, location.origin).href,
+    baseURL: new URL(`${apiPrefix}/files/`, location.origin).href,
     baseCSS,
     playerCSS,
   });

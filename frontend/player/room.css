@@ -59,6 +59,13 @@
 .room-join[hidden] {
   display: none;
 }
+.room-join.reauth {
+  background: rgb(8 16 22 / 0.68);
+  backdrop-filter: blur(9px);
+}
+.room-join.reauth form {
+  box-shadow: 0 28px 90px #0009;
+}
 .room-join form {
   width: min(420px, 100%);
   display: grid;

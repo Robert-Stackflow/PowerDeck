@@ -592,6 +592,11 @@ export async function createApp({
               interactionToken: audience.token,
               password: input.password,
             });
+          platform.askQuestion(
+            audience.token,
+            { body: `欢迎来到 ${audience.title}` },
+            "system",
+          );
           room.qr = await QRCode.toDataURL(room.url, {
             width: 360,
             margin: 1,
@@ -602,7 +607,8 @@ export async function createApp({
             margin: 1,
             color: { dark: "#13251f", light: "#ffffff" },
           });
-          room.interaction = audience;
+          room.interaction = platform.audienceState(audience.token, true);
+          room.interaction.qr = audience.qr;
           return json(res, 201, room);
         }
         if (parts[1] === "rooms" && parts[2]) {
@@ -626,6 +632,8 @@ export async function createApp({
           const audienceToken = parts[2];
           if (parts.length === 3 && method === "GET")
             return json(res, 200, platform.audienceState(audienceToken, true));
+          if (parts[3] === "polls" && parts[4] === "close" && method === "POST")
+            return json(res, 200, platform.closePoll(audienceToken));
           if (parts[3] === "polls" && method === "POST")
             return json(
               res,
@@ -640,8 +648,6 @@ export async function createApp({
             );
             return json(res, 201, platform.audienceState(audienceToken, true));
           }
-          if (parts[3] === "polls" && parts[4] === "close" && method === "POST")
-            return json(res, 200, platform.closePoll(audienceToken));
           if (parts[3] === "questions" && parts[4] && method === "PATCH")
             return json(
               res,
