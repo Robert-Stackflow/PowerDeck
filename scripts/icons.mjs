@@ -29,6 +29,8 @@ const names = {
   external: "ExternalLink",
   edit: "Pencil",
   presenter: "Monitor",
+  smartphone: "Smartphone",
+  flag: "Flag",
 };
 const escape = (s) =>
   String(s)

@@ -1,4 +1,4 @@
-import { api } from "../api.js";
+import { api, setSession } from "../api.js";
 import { icon } from "../icons.js";
 import { wheelNavigation } from "../components/wheel-navigation.js";
 
@@ -14,6 +14,7 @@ const duration = (milliseconds) => {
 try {
   const session = await api("/session");
   if (!session.authenticated) throw new Error("请登录后使用演讲者视图");
+  setSession(session);
   const { id } = await api("/resolve/" + encodeURIComponent(slug));
   const [deck, content] = await Promise.all([
     api(`/decks/${id}`),
@@ -30,13 +31,22 @@ try {
     lastStateAt = 0,
     running = true,
     accumulated = 0,
-    startedAt = performance.now();
+    startedAt = performance.now(),
+    pageStartedAt = performance.now(),
+    pageStats = Array.from({ length: deck.slideCount }, () => ({
+      ms: 0,
+      visits: 0,
+    }));
+  pageStats[current - 1].visits = 1;
   const channel = new BroadcastChannel(`powerdeck-presenter:${id}`);
   document.title = `${deck.title} · 演讲者视图`;
-  root.innerHTML = `<header class="presenter-topbar"><div class="presenter-title"><h1></h1><p>演讲者视图</p></div><div id="connectionStatus" class="presenter-status"><i></i><span>等待演示窗口</span></div><output id="sessionClock" class="session-clock">00:00</output></header><main class="presenter-main"><section class="presenter-card current-card"><div class="card-heading"><b>当前页面</b><span id="currentTitle"></span></div><div class="slide-frame-wrap"><iframe id="currentFrame" title="当前页面"></iframe></div></section><aside class="presenter-side"><section class="presenter-card next-card"><div class="card-heading"><b>下一页</b><span id="nextTitle"></span></div><div class="slide-frame-wrap"><iframe id="nextFrame" title="下一页"></iframe></div></section><section class="presenter-card notes-card"><div class="card-heading"><b>演讲备注</b><span id="notesPage"></span></div><div id="speakerNotes" class="speaker-notes"></div><div id="speakerRefs" class="speaker-refs" hidden><h3>参考资料</h3><div></div></div></section></aside></main><footer class="presenter-controls"><button id="previousPage" aria-label="上一页">${icon("prev")}上一页</button><div id="presenterCounter" class="presenter-counter"></div><button id="nextPage" class="primary">下一页${icon("next")}</button><button id="openProjection" class="projection-button">${icon("presentation")}打开演示窗口</button><button id="timerToggle" class="timer-toggle">${icon("pause")}暂停计时</button><button id="timerReset" class="timer-reset" aria-label="重置计时" title="重置计时">${icon("rotateCcw")}</button></footer>`;
+  root.innerHTML = `<header class="presenter-topbar"><div class="presenter-title"><h1></h1><p>演讲者视图</p></div><div id="connectionStatus" class="presenter-status"><i></i><span>等待演示窗口</span></div><button id="remoteControlButton" class="topbar-action" type="button">${icon("smartphone")}手机遥控</button><output id="sessionClock" class="session-clock">00:00</output></header><main class="presenter-main"><section class="presenter-card current-card"><div class="card-heading"><b>当前页面</b><span id="currentTitle"></span></div><div class="slide-frame-wrap"><iframe id="currentFrame" title="当前页面"></iframe></div></section><aside class="presenter-side"><section class="presenter-card next-card"><div class="card-heading"><b>下一页</b><span id="nextTitle"></span></div><div class="slide-frame-wrap"><iframe id="nextFrame" title="下一页"></iframe></div></section><section class="presenter-card notes-card"><div class="card-heading"><b>演讲备注</b><span id="notesPage"></span></div><div id="speakerNotes" class="speaker-notes"></div><div id="speakerRefs" class="speaker-refs" hidden><h3>参考资料</h3><div></div></div></section></aside></main><footer class="presenter-controls"><button id="previousPage" aria-label="上一页">${icon("prev")}上一页</button><div id="presenterCounter" class="presenter-counter"></div><button id="nextPage" class="primary">下一页${icon("next")}</button><button id="openProjection" class="projection-button">${icon("presentation")}打开演示窗口</button><button id="finishRehearsal">${icon("flag")}结束排练</button><button id="timerToggle" class="timer-toggle">${icon("pause")}暂停计时</button><button id="timerReset" class="timer-reset" aria-label="重置计时" title="重置计时">${icon("rotateCcw")}</button></footer><section id="remoteControlPanel" class="presenter-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="presenter-dialog-card remote-control-card"><button class="dialog-dismiss" type="button" aria-label="关闭">${icon("close")}</button><div><p class="dialog-eyebrow">手机遥控器</p><h2 id="remoteControlTitle">扫码连接演讲</h2><p>手机无需登录。扫码后可以切换页面、查看备注和控制计时。</p></div><img id="remoteControlQR" alt="手机遥控器二维码"><div class="remote-control-link"><input id="remoteControlURL" readonly aria-label="遥控器链接"><button id="copyRemoteURL" type="button">${icon("copy")}复制</button></div></div></section><section id="rehearsalPanel" class="presenter-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="rehearsalTitle"><div class="presenter-dialog-card rehearsal-card"><button class="dialog-dismiss" type="button" aria-label="关闭">${icon("close")}</button><div><p class="dialog-eyebrow">排练报告</p><h2 id="rehearsalTitle">本次演讲复盘</h2></div><div class="rehearsal-summary"></div><div class="rehearsal-table"></div><button id="continueRehearsal" class="dialog-primary" type="button">继续排练</button></div></section>`;
   root.removeAttribute("aria-busy");
   root.querySelector(".presenter-title h1").textContent = deck.title;
   const $ = (selector) => root.querySelector(selector);
+  let remoteSession = null,
+    lastRemoteCommand = 0,
+    remoteBusy = false;
   const fullscreenButton = document.createElement("button");
   fullscreenButton.id = "presenterFullscreen";
   fullscreenButton.className = "fullscreen-button";
@@ -160,10 +170,19 @@ try {
     $("#previousPage").disabled = current === 1;
     $("#nextPage").disabled = current === deck.slideCount;
   }
+  function settlePage() {
+    if (!running) return;
+    const now = performance.now();
+    pageStats[current - 1].ms += Math.max(0, now - pageStartedAt);
+    pageStartedAt = now;
+  }
   function go(page, notify = true) {
     const next = Math.max(1, Math.min(deck.slideCount, Math.trunc(page)));
     if (next === current) return;
+    settlePage();
     current = next;
+    pageStats[current - 1].visits += 1;
+    pageStartedAt = performance.now();
     render();
     if (notify) channel.postMessage({ type: "go", page: current });
   }
@@ -222,6 +241,38 @@ try {
     );
     projection?.focus();
   };
+  const closePresenterDialog = (panel) => {
+    panel.hidden = true;
+  };
+  for (const panel of root.querySelectorAll(".presenter-dialog")) {
+    panel.querySelector(".dialog-dismiss").onclick = () =>
+      closePresenterDialog(panel);
+    panel.onclick = (event) => {
+      if (event.target === panel) closePresenterDialog(panel);
+    };
+  }
+  try {
+    remoteSession = await api("/presenter-sessions", {
+      method: "POST",
+      body: { deckId: id, page: current },
+    });
+    $("#remoteControlQR").src = remoteSession.qr;
+    $("#remoteControlURL").value = remoteSession.url;
+  } catch {
+    $("#remoteControlButton").disabled = true;
+    $("#remoteControlButton").title = "暂时无法创建遥控会话";
+  }
+  $("#remoteControlButton").onclick = () => {
+    if (remoteSession) $("#remoteControlPanel").hidden = false;
+  };
+  $("#copyRemoteURL").onclick = async () => {
+    await navigator.clipboard.writeText(remoteSession.url);
+    $("#copyRemoteURL").innerHTML = `${icon("check")}已复制`;
+    setTimeout(
+      () => ($("#copyRemoteURL").innerHTML = `${icon("copy")}复制`),
+      1600,
+    );
+  };
   async function toggleFullscreen() {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -241,17 +292,60 @@ try {
   fullscreenButton.onclick = toggleFullscreen;
   addEventListener("fullscreenchange", updateFullscreenButton);
   updateFullscreenButton();
-  $("#timerToggle").onclick = () => {
-    if (running) accumulated += performance.now() - startedAt;
-    else startedAt = performance.now();
+  function toggleTimer() {
+    if (running) {
+      settlePage();
+      accumulated += performance.now() - startedAt;
+    } else {
+      startedAt = performance.now();
+      pageStartedAt = performance.now();
+    }
     running = !running;
     $("#timerToggle").innerHTML = running
       ? `${icon("pause")}暂停计时`
       : `${icon("play")}继续计时`;
-  };
-  $("#timerReset").onclick = () => {
+  }
+  function resetTimer() {
     accumulated = 0;
     startedAt = performance.now();
+    pageStartedAt = performance.now();
+    pageStats = Array.from({ length: deck.slideCount }, () => ({
+      ms: 0,
+      visits: 0,
+    }));
+    pageStats[current - 1].visits = 1;
+  }
+  $("#timerToggle").onclick = toggleTimer;
+  $("#timerReset").onclick = resetTimer;
+  function rehearsalReport() {
+    settlePage();
+    pageStartedAt = performance.now();
+    const rows = pageStats.map((row, index) => ({
+        ...row,
+        page: index + 1,
+        title: noteAt(index + 1).title || `第 ${index + 1} 页`,
+      })),
+      visited = rows.filter((row) => row.visits),
+      total = rows.reduce((sum, row) => sum + row.ms, 0),
+      longest = [...visited].sort((a, b) => b.ms - a.ms)[0];
+    $(".rehearsal-summary").innerHTML =
+      `<div><small>总时长</small><strong>${duration(total)}</strong></div><div><small>已讲页面</small><strong>${visited.length} / ${deck.slideCount}</strong></div><div><small>平均每页</small><strong>${duration(visited.length ? total / visited.length : 0)}</strong></div><div><small>停留最久</small><strong>${longest ? `第 ${longest.page} 页` : "—"}</strong></div>`;
+    $(".rehearsal-table").innerHTML =
+      `<table><thead><tr><th>页面</th><th>访问</th><th>用时</th></tr></thead><tbody>${rows
+        .map(
+          (row) =>
+            `<tr><th><span>${String(row.page).padStart(2, "0")}</span>${row.title}</th><td>${row.visits}</td><td>${duration(row.ms)}</td></tr>`,
+        )
+        .join("")}</tbody></table>`;
+    $("#rehearsalPanel").hidden = false;
+  }
+  $("#finishRehearsal").onclick = () => {
+    if (running) toggleTimer();
+    rehearsalReport();
+  };
+  $("#continueRehearsal").onclick = () => {
+    closePresenterDialog($("#rehearsalPanel"));
+    if (!running) toggleTimer();
   };
   addEventListener("keydown", (event) => {
     if (event.target.closest("a,button,input,textarea")) return;
@@ -288,10 +382,41 @@ try {
       updateConnection();
     }
   }, 250);
+  const remoteInterval = setInterval(async () => {
+    if (!remoteSession || remoteBusy) return;
+    remoteBusy = true;
+    try {
+      const elapsed =
+        accumulated + (running ? performance.now() - startedAt : 0);
+      await api(`/presenter-sessions/${remoteSession.token}`, {
+        method: "PATCH",
+        body: { page: current, running, elapsed },
+      });
+      const result = await api(
+        `/remote/${remoteSession.token}/commands?after=${lastRemoteCommand}`,
+      );
+      for (const command of result.commands) {
+        lastRemoteCommand = Math.max(lastRemoteCommand, command.id);
+        if (command.action === "previous") go(current - 1);
+        if (command.action === "next") go(current + 1);
+        if (command.action === "go") go(command.page);
+        if (command.action === "toggleTimer") toggleTimer();
+        if (command.action === "resetTimer") resetTimer();
+      }
+    } catch {}
+    remoteBusy = false;
+  }, 600);
   addEventListener("beforeunload", () => {
     cancelAnimationFrame(stateFrame);
     previewObserver.disconnect();
     channel.close();
+    clearInterval(remoteInterval);
+    if (remoteSession)
+      fetch(`/api/presenter-sessions/${remoteSession.token}`, {
+        method: "DELETE",
+        headers: { "X-CSRF-Token": session.csrf },
+        keepalive: true,
+      }).catch(() => {});
   });
   render();
   requestAnimationFrame(sizePreviewFrames);

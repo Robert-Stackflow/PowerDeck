@@ -1,7 +1,9 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import QRCode from "qrcode";
 import { createStore } from "./store.mjs";
 import { createSettings } from "./settings.mjs";
 import { createAuth, passwordHash } from "./auth.mjs";
@@ -115,6 +117,28 @@ export async function createApp({
     });
     res.end(html);
   };
+  const presenterSessions = new Map();
+  const presenterSession = (token) => {
+    const value = presenterSessions.get(token);
+    if (!value || Date.now() - value.touchedAt > 6 * 60 * 60 * 1000) {
+      presenterSessions.delete(token);
+      throw new HttpError(404, "遥控会话不存在或已结束");
+    }
+    return value;
+  };
+  const remoteState = (value) => {
+    const note = store.content(value.deckId).notes?.[value.page] || {};
+    return {
+      title: value.title,
+      page: value.page,
+      total: value.total,
+      running: value.running,
+      elapsed: value.elapsed,
+      notes: note.notes || "",
+      pageTitle: note.title || `第 ${value.page} 页`,
+      updatedAt: value.touchedAt,
+    };
+  };
   const server = http.createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -166,6 +190,48 @@ export async function createApp({
           200,
           await loginRoutes[pathname](await readJSON(req, 131072)),
         );
+      if (parts[0] === "api" && parts[1] === "remote" && parts[2]) {
+        requireValue(
+          /^[A-Za-z0-9_-]{32}$/.test(parts[2]),
+          "遥控会话编号不正确",
+        );
+        const value = presenterSession(parts[2]);
+        if (parts.length === 3 && method === "GET")
+          return json(res, 200, remoteState(value));
+        if (parts[3] === "commands" && method === "GET") {
+          const after = Number(requestURL.searchParams.get("after")) || 0;
+          value.touchedAt = Date.now();
+          return json(res, 200, {
+            commands: value.commands.filter((command) => command.id > after),
+          });
+        }
+        if (parts[3] === "actions" && method === "POST") {
+          const input = await readJSON(req, 8192);
+          requireValue(
+            ["previous", "next", "go", "toggleTimer", "resetTimer"].includes(
+              input.action,
+            ),
+            "遥控操作不正确",
+          );
+          if (input.action === "go")
+            requireValue(
+              Number.isInteger(input.page) &&
+                input.page >= 1 &&
+                input.page <= value.total,
+              "页码不正确",
+            );
+          value.sequence += 1;
+          value.commands.push({
+            id: value.sequence,
+            action: input.action,
+            ...(input.action === "go" ? { page: input.page } : {}),
+          });
+          value.commands = value.commands.slice(-50);
+          value.touchedAt = Date.now();
+          return json(res, 200, { ok: true, id: value.sequence });
+        }
+        throw new HttpError(404, "遥控接口不存在");
+      }
       if (pathname.startsWith("/api/")) {
         if (parts[1] === "public") {
           requireValue(method === "GET", "分享链接仅允许查看");
@@ -236,6 +302,51 @@ export async function createApp({
           throw new HttpError(404, "资源不存在");
         }
         auth.require(req);
+        if (pathname === "/api/presenter-sessions" && method === "POST") {
+          const input = await readJSON(req, 8192),
+            deck = store.get(input.deckId),
+            token = crypto.randomBytes(24).toString("base64url"),
+            remoteURL = `${origin || requestURL.origin}/remote/${token}`,
+            value = {
+              deckId: deck.id,
+              title: deck.title,
+              page: Math.max(1, Math.min(deck.slideCount, input.page || 1)),
+              total: deck.slideCount,
+              running: true,
+              elapsed: 0,
+              sequence: 0,
+              commands: [],
+              touchedAt: Date.now(),
+            };
+          presenterSessions.set(token, value);
+          return json(res, 201, {
+            token,
+            url: remoteURL,
+            qr: await QRCode.toDataURL(remoteURL, {
+              width: 320,
+              margin: 1,
+              color: { dark: "#13251f", light: "#ffffff" },
+            }),
+          });
+        }
+        if (parts[1] === "presenter-sessions" && parts[2]) {
+          const value = presenterSession(parts[2]);
+          if (method === "PATCH") {
+            const input = await readJSON(req, 8192);
+            if (Number.isInteger(input.page))
+              value.page = Math.max(1, Math.min(value.total, input.page));
+            if (typeof input.running === "boolean")
+              value.running = input.running;
+            if (Number.isFinite(input.elapsed) && input.elapsed >= 0)
+              value.elapsed = Math.min(input.elapsed, 7 * 24 * 60 * 60 * 1000);
+            value.touchedAt = Date.now();
+            return json(res, 200, remoteState(value));
+          }
+          if (method === "DELETE") {
+            presenterSessions.delete(parts[2]);
+            return json(res, 200, { ok: true });
+          }
+        }
         if (pathname === "/api/import/package" && method === "POST") {
           requireValue(
             [
@@ -577,6 +688,12 @@ export async function createApp({
         return sendFile(
           res,
           path.join(projectRoot, "frontend/presenter.html"),
+          "text/html; charset=utf-8",
+        );
+      if (pathname.startsWith("/remote/"))
+        return sendFile(
+          res,
+          path.join(projectRoot, "frontend/remote.html"),
           "text/html; charset=utf-8",
         );
       if (pathname.startsWith("/present/") || pathname.startsWith("/s/"))

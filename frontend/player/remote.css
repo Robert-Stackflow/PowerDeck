@@ -1,0 +1,208 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #eef4f0;
+  background: #0d1210;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: #0d1210;
+}
+body {
+  min-height: 100dvh;
+  overscroll-behavior: none;
+}
+button,
+input {
+  font: inherit;
+}
+#remoteApp {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: max(22px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
+}
+#remoteApp[aria-busy="true"] {
+  align-items: center;
+  justify-content: center;
+  color: #8d9b93;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+header p {
+  margin: 0 0 5px;
+  color: #829188;
+  font-size: 11px;
+}
+header h1 {
+  margin: 0;
+  max-width: 66vw;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#remoteStatus {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #8fc7ad;
+  font-size: 11px;
+  white-space: nowrap;
+}
+#remoteStatus i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #57c98a;
+  box-shadow: 0 0 0 4px #57c98a18;
+}
+#remoteStatus.offline {
+  color: #d0a579;
+}
+#remoteStatus.offline i {
+  background: #d0a579;
+  box-shadow: none;
+}
+.remote-page,
+.remote-notes,
+.remote-jump {
+  border: 1px solid #ffffff13;
+  border-radius: 16px;
+  background: #141b18;
+}
+.remote-page {
+  padding: 18px;
+}
+.remote-page-heading,
+.remote-notes > div {
+  display: flex;
+  justify-content: space-between;
+  color: #8d9b93;
+  font-size: 12px;
+}
+.remote-page h2 {
+  min-height: 56px;
+  margin: 22px 0;
+  font-size: 22px;
+  line-height: 1.4;
+}
+.remote-progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #ffffff0e;
+}
+.remote-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #57c98a;
+  transition: width 0.2s ease;
+}
+.remote-notes {
+  flex: 1;
+  min-height: 150px;
+  padding: 18px;
+  overflow: hidden;
+}
+.remote-notes p {
+  max-height: 30vh;
+  margin: 16px 0 0;
+  overflow: auto;
+  color: #d3ddd7;
+  font-size: 16px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+.remote-notes p.empty {
+  color: #6f7e75;
+}
+#remoteClock {
+  color: #eef4f0;
+  font-variant-numeric: tabular-nums;
+}
+.remote-jump {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  color: #9baaa2;
+  font-size: 12px;
+}
+.remote-jump input {
+  width: 100%;
+  accent-color: #57c98a;
+}
+.remote-jump output {
+  min-width: 45px;
+  text-align: right;
+}
+footer {
+  display: grid;
+  gap: 10px;
+}
+.remote-navigation,
+.remote-timer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.remote-timer {
+  grid-template-columns: 1fr 54px;
+}
+button {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #ffffff18;
+  border-radius: 13px;
+  background: #1b2420;
+  color: #e4ece7;
+  touch-action: manipulation;
+}
+button.primary {
+  background: #2f745b;
+  border-color: #3d8b6d;
+}
+button:disabled {
+  opacity: 0.35;
+}
+button svg {
+  width: 18px;
+  height: 18px;
+}
+.remote-error {
+  margin: auto;
+  text-align: center;
+  color: #91a198;
+}
+.remote-error svg {
+  width: 38px;
+  height: 38px;
+}
+.remote-error h1 {
+  color: #eef4f0;
+  font-size: 20px;
+}
+@media (min-width: 700px) {
+  #remoteApp {
+    width: min(560px, 100%);
+    margin: auto;
+  }
+}
