@@ -408,7 +408,7 @@ export function mountPresenter({
       "☕",
     ],
     roomFeedMarkup = (host = false) =>
-      `<aside id="roomLiveFeed" class="room-live-feed${host ? " room-host-only" : ""}" aria-live="polite"><button id="roomFeedToggle" class="room-feed-toggle" type="button" aria-label="收起互动评论" aria-expanded="true"><span class="room-feed-presence"><b id="roomFeedOnline">1</b><em id="roomFeedLatency">连接中</em></span><span class="room-feed-idle" hidden>···</span><i class="room-feed-unread" hidden>0</i></button><div class="room-feed-expanded"><div id="roomFeedItems"><p>互动内容会显示在这里</p></div><form id="roomFeedComposer" class="room-feed-composer" data-host="${host}"><div class="room-emoji-picker" hidden><header>选择表情</header><div>${roomEmojis.map((emoji) => `<button type="button" data-room-emoji-value="${emoji}" aria-label="插入 ${emoji}">${emoji}</button>`).join("")}</div></div><button type="button" class="room-emoji-toggle" aria-label="选择 Emoji" aria-expanded="false">${ico("smile")}</button><input name="body" maxlength="500" autocomplete="off" placeholder="发表评论…" aria-label="发表评论"><button type="submit" class="room-comment-send" aria-label="发送评论">${ico("next")}</button></form></div><div id="roomFeedToasts" class="room-feed-toasts" aria-live="polite"></div></aside>`;
+      `<aside id="roomLiveFeed" class="room-live-feed${host ? " room-host-only" : ""}" aria-live="polite"><button id="roomFeedToggle" class="room-feed-toggle" type="button" aria-label="收起互动评论" aria-expanded="true"><span class="room-feed-presence"><span>${ico("users")}<b id="roomFeedOnline">1</b></span><span>${ico("latency")}<em id="roomFeedLatency">连接中</em></span></span><span class="room-feed-idle" hidden>···</span><i class="room-feed-unread" hidden>0</i></button><div class="room-feed-expanded"><div id="roomFeedItems"><p>互动内容会显示在这里</p></div><form id="roomFeedComposer" class="room-feed-composer" data-host="${host}"><div class="room-emoji-picker" hidden><div>${roomEmojis.map((emoji) => `<button type="button" data-room-emoji-value="${emoji}" aria-label="插入 ${emoji}">${emoji}</button>`).join("")}</div></div><button type="button" class="room-emoji-toggle" aria-label="选择 Emoji" aria-expanded="false">${ico("smile")}</button><input name="body" maxlength="500" autocomplete="off" placeholder="发表评论…" aria-label="发表评论"><button type="submit" class="room-comment-send" aria-label="发送评论">${ico("next")}</button></form></div><div id="roomFeedToasts" class="room-feed-toasts" aria-live="polite"></div></aside>`;
   const sessionToolsMarkup = presenterURL
     ? `<span class="nav-divider session-divider" aria-hidden="true"></span><div class="session-control-group" role="group" aria-label="演讲辅助">${dockButton("presenterViewBtn", "presenter", "演讲者视图")}${dockButton("remoteControlBtn", "smartphone", "手机遥控")}${dockButton("roomBtn", "room", "房间")}</div>`
     : "";
@@ -1130,7 +1130,7 @@ export function mountPresenter({
   function updateRoomPresence(count, latency = null) {
     const online = $("roomFeedOnline"),
       delay = $("roomFeedLatency");
-    if (online) online.textContent = `${Math.max(0, count || 0)} 人`;
+    if (online) online.textContent = String(Math.max(0, count || 0));
     if (delay)
       delay.textContent = Number.isFinite(latency)
         ? `${Math.round(latency)} ms`
@@ -1926,8 +1926,7 @@ export function mountPresenter({
       body.innerHTML = `<div class="room-poll-empty">${ico("chartNoAxesColumn")}<b>暂时没有投票</b><span>房主发布后会显示在这里</span></div>`;
       return;
     }
-    body.innerHTML = `<div class="room-poll-card-list">${polls
-      .map((poll) => {
+    const pollCard = (poll) => {
         const submitted =
             hostWindow.sessionStorage.getItem(audienceVoteKey(poll.id)) === "1",
           showResults = poll.status !== "open" || submitted,
@@ -1936,11 +1935,11 @@ export function mountPresenter({
             messagePollId === poll.id && message
               ? message
               : submitted
-                ? "已投票 · 结果实时更新"
+                ? "已完成投票，结果会实时更新"
                 : poll.status === "closed"
-                  ? "投票已结束"
-                  : "选择一项直接提交";
-        return `<article class="room-poll-card ${poll.status === "open" ? "is-open" : "is-closed"}"><header><div><span>${poll.status === "open" ? "进行中" : "已结束"}</span><small>${total} 人参与</small></div><h3>${escapeHTML(poll.question)}</h3></header><div class="room-poll-card-options">${poll.options
+                  ? "该投票已结束"
+                  : "点击任意选项即可提交";
+        return `<article class="room-poll-card ${poll.status === "open" ? "is-open" : "is-closed"}"><header><div class="room-poll-meta"><span>${poll.status === "open" ? "正在投票" : "已结束"}</span><small>${total} 人参与</small></div><h3>${escapeHTML(poll.question)}</h3></header><div class="room-poll-card-options">${poll.options
           .map((option, index) => {
             const percent = total
               ? Math.round((option.count / total) * 100)
@@ -1948,7 +1947,16 @@ export function mountPresenter({
             return `<button type="button" data-instant-room-vote="${index}" data-poll-id="${poll.id}" ${showResults ? "disabled" : ""}>${showResults ? `<i style="width:${percent}%"></i>` : ""}<span>${escapeHTML(option.label)}</span>${showResults ? `<b>${percent}%</b>` : "<em></em>"}</button>`;
           })
           .join("")}</div><footer>${escapeHTML(statusText)}</footer></article>`;
-      })
+      },
+      sections = [
+        ["待参与", polls.filter((poll) => poll.status === "open")],
+        ["投票历史", polls.filter((poll) => poll.status !== "open")],
+      ].filter(([, items]) => items.length);
+    body.innerHTML = `<div class="room-poll-sections">${sections
+      .map(
+        ([label, items]) =>
+          `<section class="room-poll-section"><div class="room-poll-section-title"><b>${label}</b><span>${items.length}</span></div><div class="room-poll-card-list">${items.map(pollCard).join("")}</div></section>`,
+      )
       .join("")}</div>`;
     body.querySelectorAll("[data-instant-room-vote]").forEach((button) => {
       button.onclick = async () => {
@@ -1957,6 +1965,7 @@ export function mountPresenter({
         card
           .querySelectorAll("button")
           .forEach((item) => (item.disabled = true));
+        card.classList.add("is-submitting");
         try {
           roomAudienceState = await roomAudienceRequest("/vote", {
             method: "POST",

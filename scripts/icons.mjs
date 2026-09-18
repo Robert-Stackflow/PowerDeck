@@ -32,6 +32,8 @@ const names = {
   smartphone: "Smartphone",
   audience: "MessageSquare",
   smile: "Smile",
+  users: "Users",
+  latency: "Gauge",
   room: "RadioTower",
   flag: "Flag",
 };
