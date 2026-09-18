@@ -255,7 +255,11 @@ export async function createApp({
           return json(
             res,
             200,
-            rooms.joinInfo(roomToken, roomAdmission(req, roomToken)),
+            rooms.joinInfo(
+              roomToken,
+              roomAdmission(req, roomToken),
+              clientConnection(req),
+            ),
           );
         if (parts[3] === "join" && method === "POST") {
           const joined = rooms.join(
@@ -304,11 +308,8 @@ export async function createApp({
           });
         }
         if (parts[3] === "feed" && method === "GET") {
-          if (
-            !room.permissions.interaction ||
-            !room.permissions.showInteractionFeed
-          )
-            throw new HttpError(403, "房主未开放互动悬浮列表");
+          if (!room.permissions.interaction)
+            throw new HttpError(403, "房主未开放互动功能");
           return json(res, 200, platform.audienceFeed(room.interactionToken));
         }
         if (parts[3] === "files" && method === "GET") {
@@ -632,9 +633,26 @@ export async function createApp({
           const audienceToken = parts[2];
           if (parts.length === 3 && method === "GET")
             return json(res, 200, platform.audienceState(audienceToken, true));
-          if (parts[3] === "polls" && parts[4] === "close" && method === "POST")
-            return json(res, 200, platform.closePoll(audienceToken));
-          if (parts[3] === "polls" && method === "POST")
+          if (
+            parts[3] === "polls" &&
+            parts[4] &&
+            parts[5] === "close" &&
+            method === "POST"
+          )
+            return json(res, 200, platform.closePoll(audienceToken, parts[4]));
+          if (
+            parts[3] === "polls" &&
+            parts[4] === "close" &&
+            method === "POST"
+          ) {
+            const input = await readJSON(req, 8192);
+            return json(
+              res,
+              200,
+              platform.closePoll(audienceToken, input.pollId),
+            );
+          }
+          if (parts[3] === "polls" && parts.length === 4 && method === "POST")
             return json(
               res,
               201,

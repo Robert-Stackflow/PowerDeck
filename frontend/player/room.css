@@ -78,6 +78,11 @@
   box-shadow: 0 28px 90px #0008;
   backdrop-filter: blur(18px);
 }
+.room-join input:read-only {
+  color: #93a39b;
+  background: #141e24;
+  cursor: not-allowed;
+}
 .room-join-icon {
   display: grid;
   place-items: center;

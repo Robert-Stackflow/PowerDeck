@@ -35,7 +35,7 @@ export function createPlatform(store, dataDir, publicURL) {
     );
     CREATE TABLE IF NOT EXISTS audience_votes(
       id TEXT PRIMARY KEY,poll_id TEXT NOT NULL REFERENCES audience_polls(id) ON DELETE CASCADE,
-      visitor TEXT NOT NULL,option_index INTEGER NOT NULL,created_at INTEGER NOT NULL,
+      visitor TEXT NOT NULL,option_index INTEGER NOT NULL,voter_name TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL,
       UNIQUE(poll_id,visitor)
     );
     CREATE TABLE IF NOT EXISTS audience_feedback(
@@ -57,6 +57,15 @@ export function createPlatform(store, dataDir, publicURL) {
   )
     db.exec(
       "ALTER TABLE audience_questions ADD COLUMN author_role TEXT NOT NULL DEFAULT 'audience'",
+    );
+  if (
+    !db
+      .prepare("PRAGMA table_info(audience_votes)")
+      .all()
+      .some((column) => column.name === "voter_name")
+  )
+    db.exec(
+      "ALTER TABLE audience_votes ADD COLUMN voter_name TEXT NOT NULL DEFAULT ''",
     );
 
   const brandKit = () => {
@@ -155,7 +164,7 @@ export function createPlatform(store, dataDir, publicURL) {
       throw new HttpError(404, "互动会话不存在或已结束");
     return session;
   };
-  const pollDTO = (row) => {
+  const pollDTO = (row, includeVoters = false) => {
     if (!row) return null;
     const options = JSON.parse(row.options),
       counts = db
@@ -165,7 +174,14 @@ export function createPlatform(store, dataDir, publicURL) {
         .all(row.id),
       countMap = new Map(
         counts.map((entry) => [entry.optionIndex, entry.count]),
-      );
+      ),
+      voters = includeVoters
+        ? db
+            .prepare(
+              "SELECT voter_name AS name,option_index AS optionIndex,created_at AS createdAt FROM audience_votes WHERE poll_id=? ORDER BY created_at ASC",
+            )
+            .all(row.id)
+        : undefined;
     return {
       id: row.id,
       question: row.question,
@@ -176,15 +192,17 @@ export function createPlatform(store, dataDir, publicURL) {
         count: countMap.get(index) || 0,
       })),
       votes: counts.reduce((sum, entry) => sum + entry.count, 0),
+      ...(includeVoters ? { voters } : {}),
     };
   };
   const audienceState = (token, admin = false) => {
     const session = audienceSession(token),
-      poll = db
+      polls = db
         .prepare(
-          "SELECT * FROM audience_polls WHERE session_token=? ORDER BY created_at DESC LIMIT 1",
+          "SELECT * FROM audience_polls WHERE session_token=? ORDER BY created_at DESC LIMIT 50",
         )
-        .get(token),
+        .all(token)
+        .map((poll) => pollDTO(poll, admin)),
       questions = admin
         ? db
             .prepare(
@@ -209,7 +227,8 @@ export function createPlatform(store, dataDir, publicURL) {
       token,
       title: session.title,
       active: !!session.active,
-      poll: pollDTO(poll),
+      poll: polls[0] || null,
+      polls,
       questionCount: db
         .prepare(
           "SELECT COUNT(*) AS count FROM audience_questions WHERE session_token=?",
@@ -229,7 +248,12 @@ export function createPlatform(store, dataDir, publicURL) {
           "SELECT id,name,body,author_role AS authorRole,created_at AS createdAt FROM audience_questions WHERE session_token=? ORDER BY created_at DESC LIMIT 30",
         )
         .all(token);
-    return { poll: state.poll, comments, updatedAt: Date.now() };
+    return {
+      poll: state.poll,
+      polls: state.polls,
+      comments,
+      updatedAt: Date.now(),
+    };
   };
   const recordAudienceConnection = (token, connection) => {
     audienceSession(token);
@@ -266,22 +290,33 @@ export function createPlatform(store, dataDir, publicURL) {
       body.length >= 1 && body.length <= 500,
       "评论需为 1–500 个字符",
     );
+    const id = crypto.randomUUID(),
+      createdAt = Date.now(),
+      displayName =
+        role === "host"
+          ? "房主"
+          : role === "system"
+            ? "系统"
+            : name || "匿名观众";
     db.prepare(
       "INSERT INTO audience_questions(id,session_token,name,body,author_role,answered,created_at) VALUES(?,?,?,?,?,?,?)",
     ).run(
-      crypto.randomUUID(),
+      id,
       token,
-      role === "host"
-        ? "房主"
-        : role === "system"
-          ? "系统"
-          : name || "匿名观众",
+      displayName,
       body,
       role,
       role === "system" ? 1 : 0,
-      Date.now(),
+      createdAt,
     );
-    return { ok: true };
+    return {
+      id,
+      name: displayName,
+      body,
+      authorRole: role,
+      answered: role === "system",
+      createdAt,
+    };
   };
   const createPoll = (token, input) => {
     audienceSession(token);
@@ -297,9 +332,6 @@ export function createPlatform(store, dataDir, publicURL) {
       options.length >= 2 && options.length <= 8,
       "投票需要 2–8 个选项",
     );
-    db.prepare(
-      "UPDATE audience_polls SET status='closed' WHERE session_token=? AND status='open'",
-    ).run(token);
     const id = crypto.randomUUID();
     db.prepare(
       "INSERT INTO audience_polls(id,session_token,question,options,created_at) VALUES(?,?,?,?,?)",
@@ -321,12 +353,15 @@ export function createPlatform(store, dataDir, publicURL) {
     );
     try {
       db.prepare(
-        "INSERT INTO audience_votes(id,poll_id,visitor,option_index,created_at) VALUES(?,?,?,?,?)",
+        "INSERT INTO audience_votes(id,poll_id,visitor,option_index,voter_name,created_at) VALUES(?,?,?,?,?,?)",
       ).run(
         crypto.randomUUID(),
         poll.id,
         visitor(input.visitor),
         option,
+        String(input.name || "匿名观众")
+          .trim()
+          .slice(0, 40) || "匿名观众",
         Date.now(),
       );
     } catch (error) {
@@ -492,11 +527,23 @@ export function createPlatform(store, dataDir, publicURL) {
     createPoll,
     vote,
     feedback,
-    closePoll: (token) => {
+    closePoll: (token, pollId = null) => {
       audienceSession(token);
+      const target = pollId
+        ? db
+            .prepare(
+              "SELECT id FROM audience_polls WHERE id=? AND session_token=?",
+            )
+            .get(pollId, token)
+        : db
+            .prepare(
+              "SELECT id FROM audience_polls WHERE session_token=? AND status='open' ORDER BY created_at DESC LIMIT 1",
+            )
+            .get(token);
+      if (!target) throw new HttpError(404, "投票不存在");
       db.prepare(
-        "UPDATE audience_polls SET status='closed' WHERE session_token=? AND status='open'",
-      ).run(token);
+        "UPDATE audience_polls SET status='closed' WHERE id=? AND session_token=?",
+      ).run(target.id, token);
       return audienceState(token, true);
     },
     answerQuestion: (token, id, answered = true) => {

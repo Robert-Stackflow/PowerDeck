@@ -24,7 +24,10 @@ let room,
   stopped = false;
 
 async function read(url) {
-  const response = await fetch(url, { cache: "no-store" });
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: { "X-PowerDeck-Device": deviceId },
+  });
   const value = await response.json().catch(() => ({}));
   if (!response.ok)
     throw Object.assign(new Error(value.error || "无法加入房间"), {
@@ -36,6 +39,7 @@ async function read(url) {
 function setStatus(text, state = "") {
   status.className = state;
   status.querySelector("span").textContent = text;
+  status.hidden = state === "connected";
 }
 
 async function ensureJoined(prefix) {
@@ -51,7 +55,8 @@ async function ensureJoined(prefix) {
   passwordField.hidden = !info.passwordProtected;
   passwordInput.required = info.passwordProtected;
   passwordInput.value = "";
-  joinForm.elements.name.value = savedName;
+  joinForm.elements.name.value = info.name || savedName;
+  joinForm.elements.name.readOnly = info.nameLocked;
   await new Promise((resolve) => {
     joinForm.onsubmit = async (event) => {
       event.preventDefault();
@@ -145,7 +150,7 @@ function connect() {
   setStatus("正在连接房间", "reconnecting");
   socket.onopen = () => {
     reconnectDelay = 700;
-    setStatus("已同步房主画面", "connected");
+    setStatus("", "connected");
     const ping = () =>
       socket?.readyState === WebSocket.OPEN &&
       socket.send(JSON.stringify({ type: "ping", at: Date.now() }));
@@ -174,8 +179,7 @@ function connect() {
 function configureFeed() {
   clearInterval(feedTimer);
   feedTimer = 0;
-  if (!room?.permissions.interaction || !room.permissions.showInteractionFeed)
-    return;
+  if (!room?.permissions.interaction) return;
   const refreshFeed = async () => {
     try {
       window.presentation?.applyRoomFeed(await read(`${apiPrefix}/feed`));

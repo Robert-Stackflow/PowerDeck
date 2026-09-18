@@ -116,6 +116,7 @@ export function createRooms(store, publicURL = "") {
           ? passwordDigest(String(password).trim())
           : null,
         admissions: new Map(),
+        identities: new Map(),
         pointer: null,
         ink: {},
         clients: new Set(),
@@ -133,19 +134,21 @@ export function createRooms(store, publicURL = "") {
     return value;
   }
 
-  function joinInfo(roomToken, admissionToken) {
+  function joinInfo(roomToken, admissionToken, connection = {}) {
     const room = get(roomToken);
     if (!room) {
       const error = new Error("房间不存在或已结束");
       error.status = 404;
       throw error;
     }
-    const current = admission(room, admissionToken);
+    const current = admission(room, admissionToken),
+      lockedName = room.identities.get(connection.deviceId) || "";
     return {
       title: room.title,
       passwordProtected: !!room.password,
       joined: !!current,
-      name: current?.name || "",
+      name: current?.name || lockedName,
+      nameLocked: !!lockedName,
     };
   }
 
@@ -156,9 +159,12 @@ export function createRooms(store, publicURL = "") {
       error.status = 404;
       throw error;
     }
-    const cleanName = String(name || "")
-      .trim()
-      .slice(0, 40);
+    const lockedName = room.identities.get(connection.deviceId),
+      cleanName =
+        lockedName ||
+        String(name || "")
+          .trim()
+          .slice(0, 40);
     if (!cleanName) {
       const error = new Error("请填写称呼");
       error.status = 400;
@@ -182,6 +188,7 @@ export function createRooms(store, publicURL = "") {
       }
     }
     const admissionToken = token();
+    room.identities.set(connection.deviceId, cleanName);
     room.admissions.set(admissionToken, {
       name: cleanName,
       deviceId: connection.deviceId,
