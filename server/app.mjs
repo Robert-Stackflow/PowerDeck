@@ -7,6 +7,7 @@ import QRCode from "qrcode";
 import { createStore } from "./store.mjs";
 import { createSettings } from "./settings.mjs";
 import { createAuth, passwordHash } from "./auth.mjs";
+import { createPlatform } from "./platform.mjs";
 import { importPowerPoint } from "./import/powerpoint.mjs";
 import { pipeline } from "node:stream/promises";
 import { renderExport, exportTypes } from "./render-export.mjs";
@@ -43,6 +44,16 @@ async function readJSON(req, limit = 48 * 1024 * 1024) {
   } catch {
     throw new HttpError(400, "JSON 格式不正确");
   }
+}
+async function readBytes(req, limit) {
+  const chunks = [];
+  let length = 0;
+  for await (const chunk of req) {
+    length += chunk.length;
+    if (length > limit) throw new HttpError(413, "上传内容过大");
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 const publicMeta = (d) => ({
   id: d.id,
@@ -88,6 +99,7 @@ export async function createApp({
     origin,
     site: settings.read,
   });
+  const platform = createPlatform(store, dataDir, origin || publicURL || "");
   const sendFile = (res, file, type) => {
     const data = fs.readFileSync(file);
     res.writeHead(200, { "Content-Type": type, "Content-Length": data.length });
@@ -232,6 +244,23 @@ export async function createApp({
         }
         throw new HttpError(404, "遥控接口不存在");
       }
+      if (parts[0] === "api" && parts[1] === "audience" && parts[2]) {
+        const audienceToken = parts[2];
+        requireValue(
+          /^[A-Za-z0-9_-]{32}$/.test(audienceToken),
+          "互动会话编号不正确",
+        );
+        if (parts.length === 3 && method === "GET")
+          return json(res, 200, platform.audienceState(audienceToken));
+        const input = await readJSON(req, 16384);
+        if (parts[3] === "questions" && method === "POST")
+          return json(res, 201, platform.askQuestion(audienceToken, input));
+        if (parts[3] === "vote" && method === "POST")
+          return json(res, 200, platform.vote(audienceToken, input));
+        if (parts[3] === "feedback" && method === "POST")
+          return json(res, 200, platform.feedback(audienceToken, input));
+        throw new HttpError(404, "互动接口不存在");
+      }
       if (pathname.startsWith("/api/")) {
         if (parts[1] === "public") {
           requireValue(method === "GET", "分享链接仅允许查看");
@@ -301,7 +330,141 @@ export async function createApp({
           }
           throw new HttpError(404, "资源不存在");
         }
-        auth.require(req);
+        const identity = auth.require(req),
+          role = identity.user.role,
+          ownerOnly =
+            pathname.startsWith("/api/workspace-users") ||
+            pathname.startsWith("/api/backups") ||
+            pathname.startsWith("/api/security") ||
+            (pathname === "/api/site" && method !== "GET");
+        if (ownerOnly && role !== "owner")
+          throw new HttpError(403, "仅工作区所有者可以执行此操作");
+        if (
+          !["GET", "HEAD"].includes(method) &&
+          ["reviewer", "viewer"].includes(role) &&
+          !["/api/logout", "/api/password"].includes(pathname)
+        )
+          throw new HttpError(403, "当前角色仅可查看内容");
+        if (pathname === "/api/workspace-users" && method === "GET")
+          return json(res, 200, { users: auth.users() });
+        if (pathname === "/api/workspace-users" && method === "POST")
+          return json(
+            res,
+            201,
+            await auth.createUser(await readJSON(req, 16384)),
+          );
+        if (parts[1] === "workspace-users" && parts[2]) {
+          if (method === "PATCH")
+            return json(
+              res,
+              200,
+              auth.updateUser(parts[2], await readJSON(req, 8192)),
+            );
+          if (method === "DELETE")
+            return json(res, 200, auth.deleteUser(parts[2]));
+        }
+        if (pathname === "/api/brand-kit") {
+          if (method === "GET") return json(res, 200, platform.brandKit());
+          if (method === "PATCH")
+            return json(
+              res,
+              200,
+              platform.saveBrandKit(await readJSON(req, 8192)),
+            );
+        }
+        if (pathname === "/api/brand-assets") {
+          if (method === "GET")
+            return json(res, 200, { assets: platform.listBrandAssets() });
+          if (method === "POST")
+            return json(
+              res,
+              201,
+              platform.uploadBrandAsset(await readJSON(req, 48 * 1024 * 1024)),
+            );
+        }
+        if (parts[1] === "brand-assets" && parts[2]) {
+          if (parts[3] === "file" && method === "GET") {
+            const asset = platform.brandAsset(parts[2]);
+            return sendFile(res, asset.file, asset.row.type);
+          }
+          if (parts[3] === "use" && method === "POST")
+            return json(
+              res,
+              200,
+              platform.useBrandAsset(
+                parts[2],
+                (await readJSON(req, 8192)).deckId,
+              ),
+            );
+          if (parts.length === 3 && method === "DELETE")
+            return json(res, 200, platform.deleteBrandAsset(parts[2]));
+        }
+        if (pathname === "/api/backups") {
+          if (method === "GET")
+            return json(res, 200, { backups: platform.backups() });
+          if (method === "POST")
+            return json(res, 201, await platform.createBackup());
+        }
+        if (parts[1] === "backups" && parts[2]) {
+          if (parts[2] === "restore" && method === "POST") {
+            const result = await platform.restoreBackup(
+              await readBytes(req, 512 * 1024 * 1024),
+            );
+            json(res, 200, result);
+            setTimeout(() => process.exit(0), 300);
+            return;
+          }
+          const backupName = parts[2];
+          if (parts[3] === "download" && method === "GET") {
+            res.setHeader(
+              "Content-Disposition",
+              `attachment; filename="${backupName}"`,
+            );
+            return sendFile(
+              res,
+              platform.backupFile(backupName),
+              "application/zip",
+            );
+          }
+          if (parts.length === 3 && method === "DELETE")
+            return json(res, 200, platform.deleteBackup(backupName));
+        }
+        if (pathname === "/api/audience-sessions" && method === "POST") {
+          const audience = platform.createAudience(
+            (await readJSON(req, 8192)).deckId,
+          );
+          audience.qr = await QRCode.toDataURL(audience.url, {
+            width: 320,
+            margin: 1,
+            color: { dark: "#13251f", light: "#ffffff" },
+          });
+          return json(res, 201, audience);
+        }
+        if (parts[1] === "audience-sessions" && parts[2]) {
+          const audienceToken = parts[2];
+          if (parts.length === 3 && method === "GET")
+            return json(res, 200, platform.audienceState(audienceToken, true));
+          if (parts[3] === "polls" && method === "POST")
+            return json(
+              res,
+              201,
+              platform.createPoll(audienceToken, await readJSON(req, 16384)),
+            );
+          if (parts[3] === "polls" && parts[4] === "close" && method === "POST")
+            return json(res, 200, platform.closePoll(audienceToken));
+          if (parts[3] === "questions" && parts[4] && method === "PATCH")
+            return json(
+              res,
+              200,
+              platform.answerQuestion(
+                audienceToken,
+                parts[4],
+                (await readJSON(req, 2048)).answered,
+              ),
+            );
+          if (parts.length === 3 && method === "DELETE")
+            return json(res, 200, platform.endAudience(audienceToken));
+        }
         if (pathname === "/api/presenter-sessions" && method === "POST") {
           const input = await readJSON(req, 8192),
             deck = store.get(input.deckId),
@@ -694,6 +857,12 @@ export async function createApp({
         return sendFile(
           res,
           path.join(projectRoot, "frontend/remote.html"),
+          "text/html; charset=utf-8",
+        );
+      if (pathname.startsWith("/audience/"))
+        return sendFile(
+          res,
+          path.join(projectRoot, "frontend/audience.html"),
           "text/html; charset=utf-8",
         );
       if (pathname.startsWith("/present/") || pathname.startsWith("/s/"))

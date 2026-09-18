@@ -24,6 +24,7 @@ export function createSecurity({
   limit,
   resetLimit,
   verifyPassword,
+  userById,
 }) {
   db.exec(`CREATE TABLE IF NOT EXISTS account_security(id INTEGER PRIMARY KEY CHECK(id=1),secret TEXT,last_counter INTEGER NOT NULL DEFAULT -1,recovery TEXT NOT NULL DEFAULT '[]');
     INSERT OR IGNORE INTO account_security(id) VALUES(1);
@@ -128,11 +129,14 @@ export function createSecurity({
     verifyFactor(data.code);
     resetLimit(req);
   }
-  function finish(req, res) {
+  function finish(req, res, user) {
     if (state().secret)
-      return { mfaRequired: true, challenge: remember("login", req) };
+      return {
+        mfaRequired: true,
+        challenge: remember("login", req, { userId: user?.id }),
+      };
     resetLimit(req);
-    return issue(res);
+    return issue(res, user);
   }
   function relyingParty(req) {
     const u = new URL(origin || `http://${req.headers.host}`);
@@ -179,11 +183,11 @@ export function createSecurity({
     },
     mfa(req, res, data) {
       limit(req.socket.remoteAddress);
-      take(data.challenge, "login", req, false);
+      const pendingLogin = take(data.challenge, "login", req, false);
       verifyFactor(data.code);
       pending.delete(data.challenge);
       resetLimit(req);
-      return issue(res);
+      return issue(res, userById(pendingLogin.userId) || undefined);
     },
     async setupTotp(req, data) {
       if (state().secret) throw new HttpError(409, "双因素验证已启用");

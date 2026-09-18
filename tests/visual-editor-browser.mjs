@@ -155,7 +155,7 @@ try {
       await page.locator("#insertText").click();
       await frame().locator('[data-editor-element="text"]').dblclick();
       await frame().locator('[data-editor-element="text"]').fill("新增文本框");
-      await page.locator('[data-inspector-tab="page"]').click();
+      await page.locator('[data-inspector-tab="element"]').click();
       await page.locator("#duplicateElement").click();
       assert.equal(
         await frame().locator('[data-editor-element="text"]').count(),

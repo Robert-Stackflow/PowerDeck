@@ -14,7 +14,7 @@
     "dev": "node --env-file-if-exists=.env --watch server/app.mjs",
     "build": "node scripts/build.mjs",
     "sync:areal": "node --env-file-if-exists=.env scripts/sync-content.mjs",
-    "test": "npm run build && node --test tests/*.test.mjs && node tests/timer-browser.mjs && node tests/references-browser.mjs && node tests/browser.mjs && node tests/settings-browser.mjs && node tests/visual-editor-browser.mjs && node tests/editor-workspace-browser.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs && node tests/timer-browser.mjs && node tests/references-browser.mjs && node tests/browser.mjs && node tests/settings-browser.mjs && node tests/visual-editor-browser.mjs && node tests/editor-workspace-browser.mjs && node tests/platform-features-browser.mjs",
     "format": "prettier --write frontend server scripts tests presentations package.json README.md outputs/*.md",
     "format:check": "prettier --check frontend server scripts tests presentations package.json README.md outputs/*.md",
     "clean:qa": "node scripts/clean-qa.mjs"

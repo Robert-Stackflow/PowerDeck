@@ -225,6 +225,9 @@
   overflow: auto;
   scrollbar-gutter: stable;
 }
+.inspector-tab-panel[hidden] {
+  display: none;
+}
 .inspector-page-panel {
   display: flex;
   flex-direction: column;
@@ -882,6 +885,53 @@
 .reference-library-popover {
   width: 440px;
   padding: 12px;
+}
+.brand-assets-popover {
+  width: min(520px, calc(100vw - 24px));
+  max-height: min(560px, calc(100dvh - 30px));
+  padding: 14px;
+  overflow: auto;
+}
+.brand-assets-loading {
+  padding: 30px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+}
+.brand-assets-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 12px;
+}
+.brand-assets-grid button {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--secondary);
+  text-align: left;
+}
+.brand-assets-grid button:hover {
+  border-color: var(--green);
+  background: var(--light);
+}
+.brand-assets-grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16/10;
+  object-fit: contain;
+  border-radius: 7px;
+  background: var(--paper);
+}
+.brand-assets-grid span {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
 }
 .popover-heading {
   justify-content: space-between;

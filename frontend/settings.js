@@ -5,6 +5,11 @@ import { toastPositions } from "./components/toast.js";
 import { site, brand, setSite, defaultIcon, iconFromFile } from "./branding.js";
 import { showDialog, closeDialog, toast, copy } from "./app.js";
 import { startRegistration } from "./webauthn/index.js";
+import {
+  mountPlatformSettings,
+  platformSettingsNav,
+  platformSettingsPanels,
+} from "./platform-settings.js";
 
 export const passkeyAvailable = () =>
   !!window.PublicKeyCredential &&
@@ -33,7 +38,15 @@ let activeTab = sessionStorage.getItem("settingsTab") || "general";
 export async function openSettings() {
   const main = document.querySelector("main.library");
   sessionStorage.setItem("libraryView", "settings");
-  let security = await api("/security"),
+  if (
+    session.role !== "owner" &&
+    ["brand", "team", "backup"].includes(activeTab)
+  )
+    activeTab = "general";
+  let security =
+      session.role === "owner"
+        ? await api("/security")
+        : { passkeys: [], totpEnabled: false, recoveryRemaining: 0 },
     favicon = site.favicon;
   // A category click while the request is in flight must keep its own view.
   if (
@@ -50,7 +63,7 @@ export async function openSettings() {
   account.setAttribute("aria-current", "page");
   document.title = "设置 · " + site.name;
   main.className = "library settings-view";
-  main.innerHTML = `<header class="library-header"><h1>设置</h1></header><div class="settings-layout"><aside class="settings-nav settings-card"><nav aria-label="设置分类"><button class="nav-item ${tab === "general" ? "active" : ""}" data-settings-tab="general" aria-pressed="${tab === "general"}">${icon("settings2")}基础设置</button><button class="nav-item ${tab === "security" ? "active" : ""}" data-settings-tab="security" aria-pressed="${tab === "security"}">${icon("shieldCheck")}安全设置</button></nav></aside><div class="settings-content"><section id="generalSettings" ${tab !== "general" ? "hidden" : ""}><form id="siteForm" class="settings-card"><div class="settings-card-heading">${icon("globe")}<h2>网站信息</h2></div><div class="icon-setting"><img id="siteIconPreview" src="${esc(favicon || defaultIcon)}" alt="网站图标"><div><label class="button" for="siteIconFile">${icon("upload")}上传图标</label><input type="file" id="siteIconFile" accept="image/*" hidden><button type="button" id="resetSiteIcon" class="button subtle">恢复默认</button></div></div><label>网站名称<input name="name" value="${esc(site.name)}" maxlength="40" required></label><fieldset class="theme-setting"><legend>外观</legend><div class="theme-options">${[
+  main.innerHTML = `<header class="library-header"><h1>设置</h1></header><div class="settings-layout"><aside class="settings-nav settings-card"><nav aria-label="设置分类"><button class="nav-item ${tab === "general" ? "active" : ""}" data-settings-tab="general" aria-pressed="${tab === "general"}">${icon("settings2")}基础设置</button><button class="nav-item ${tab === "security" ? "active" : ""}" data-settings-tab="security" aria-pressed="${tab === "security"}">${icon("shieldCheck")}安全设置</button>${platformSettingsNav(tab)}</nav></aside><div class="settings-content"><section id="generalSettings" data-settings-panel="general" ${tab !== "general" ? "hidden" : ""}><form id="siteForm" class="settings-card"><div class="settings-card-heading">${icon("globe")}<h2>网站信息</h2></div><div class="icon-setting"><img id="siteIconPreview" src="${esc(favicon || defaultIcon)}" alt="网站图标"><div><label class="button" for="siteIconFile">${icon("upload")}上传图标</label><input type="file" id="siteIconFile" accept="image/*" hidden><button type="button" id="resetSiteIcon" class="button subtle">恢复默认</button></div></div><label>网站名称<input name="name" value="${esc(site.name)}" maxlength="40" required></label><fieldset class="theme-setting"><legend>外观</legend><div class="theme-options">${[
     ["light", "sun", "浅色"],
     ["dark", "moon", "深色"],
     ["system", "monitor", "跟随系统"],
@@ -61,15 +74,16 @@ export async function openSettings() {
     )
     .join(
       "",
-    )}</div></fieldset><div class="toast-setting"><label>提示位置${selectMarkup({ id: "toastPosition", value: site.toastPosition || "bottom-center", options: toastPositions, label: "提示位置" })}</label><button type="button" id="previewToast" class="button subtle">预览提示</button></div><div class="settings-card-footer"><button class="button primary" type="submit">保存设置</button></div></form></section><section id="securitySettings" class="settings-card security-card" ${tab !== "security" ? "hidden" : ""}><div class="security-section"><div class="security-row"><div class="security-symbol">${icon("keyRound")}</div><div class="security-copy"><h2>登录密码</h2><p>更新密码后，其他设备需要重新登录。</p></div><button id="changePassword" class="button">修改密码</button></div></div><div class="security-section"><div class="security-row"><div class="security-symbol">${icon("fingerprint")}</div><div class="security-copy"><h2>通行密钥</h2><p>通过指纹、面容或设备锁屏密码登录。</p></div><button id="addPasskey" class="button" ${passkeyAvailable() ? "" : "disabled"}>${icon("plus")}添加</button></div>${!passkeyAvailable() ? `<p class="settings-hint">${passkeyHint()}</p>` : ""}<div class="passkey-list" aria-label="已添加的通行密钥">${passkeyList(security.passkeys)}</div></div><div class="security-section"><div class="security-row"><div class="security-symbol">${icon("shieldCheck")}</div><div class="security-copy"><h2>双因素身份验证 <span class="badge ${security.totpEnabled ? "shared" : ""}">${security.totpEnabled ? "已启用" : "未启用"}</span></h2><p>登录时输入验证器中的 6 位动态验证码。</p></div><button id="toggleTotp" class="button ${security.totpEnabled ? "" : "primary"}">${security.totpEnabled ? "关闭" : "启用"}</button></div>${security.totpEnabled ? `<div class="recovery-row"><span>恢复码剩余 ${security.recoveryRemaining} 个</span><button id="rotateRecovery" class="button subtle">重新生成恢复码</button></div>` : ""}</div></section></div></div>`;
+    )}</div></fieldset><div class="toast-setting"><label>提示位置${selectMarkup({ id: "toastPosition", value: site.toastPosition || "bottom-center", options: toastPositions, label: "提示位置" })}</label><button type="button" id="previewToast" class="button subtle">预览提示</button></div><div class="settings-card-footer"><button class="button primary" type="submit">保存设置</button></div></form></section><section id="securitySettings" data-settings-panel="security" class="settings-card security-card" ${tab !== "security" ? "hidden" : ""}><div class="security-section"><div class="security-row"><div class="security-symbol">${icon("keyRound")}</div><div class="security-copy"><h2>登录密码</h2><p>更新密码后，其他设备需要重新登录。</p></div><button id="changePassword" class="button">修改密码</button></div></div><div class="security-section owner-security"><div class="security-row"><div class="security-symbol">${icon("fingerprint")}</div><div class="security-copy"><h2>通行密钥</h2><p>通过指纹、面容或设备锁屏密码登录。</p></div><button id="addPasskey" class="button" ${passkeyAvailable() && session.role === "owner" ? "" : "disabled"}>${icon("plus")}添加</button></div>${!passkeyAvailable() ? `<p class="settings-hint">${passkeyHint()}</p>` : ""}<div class="passkey-list" aria-label="已添加的通行密钥">${passkeyList(security.passkeys)}</div></div><div class="security-section owner-security"><div class="security-row"><div class="security-symbol">${icon("shieldCheck")}</div><div class="security-copy"><h2>双因素身份验证 <span class="badge ${security.totpEnabled ? "shared" : ""}">${security.totpEnabled ? "已启用" : "未启用"}</span></h2><p>登录时输入验证器中的 6 位动态验证码。</p></div><button id="toggleTotp" class="button ${security.totpEnabled ? "" : "primary"}" ${session.role === "owner" ? "" : "disabled"}>${security.totpEnabled ? "关闭" : "启用"}</button></div>${security.totpEnabled ? `<div class="recovery-row"><span>恢复码剩余 ${security.recoveryRemaining} 个</span><button id="rotateRecovery" class="button subtle">重新生成恢复码</button></div>` : ""}</div></section>${platformSettingsPanels(tab)}</div></div>`;
   enhanceSelects(main);
   main.querySelector("#previewToast").onclick = () =>
     toast("这是一条提示消息", main.querySelector("#toastPosition").value);
   const selectTab = (name) => {
     activeTab = name;
     sessionStorage.setItem("settingsTab", name);
-    document.querySelector("#generalSettings").hidden = name !== "general";
-    document.querySelector("#securitySettings").hidden = name !== "security";
+    document.querySelectorAll("[data-settings-panel]").forEach((panel) => {
+      panel.hidden = panel.dataset.settingsPanel !== name;
+    });
     document.querySelectorAll("[data-settings-tab]").forEach((b) => {
       b.classList.toggle("active", b.dataset.settingsTab === name);
       b.setAttribute("aria-pressed", String(b.dataset.settingsTab === name));
@@ -78,6 +92,21 @@ export async function openSettings() {
   document
     .querySelectorAll("[data-settings-tab]")
     .forEach((b) => (b.onclick = () => selectTab(b.dataset.settingsTab)));
+  await mountPlatformSettings(main, {
+    showDialog,
+    closeDialog,
+    toast,
+  });
+  if (session.role !== "owner") {
+    main
+      .querySelectorAll(".owner-security")
+      .forEach((section) => (section.hidden = true));
+    main
+      .querySelectorAll("#siteForm input,#siteForm button")
+      .forEach((control) => {
+        if (control.id !== "previewToast") control.disabled = true;
+      });
+  }
   document.querySelector("#siteIconFile").onchange = async (e) => {
     try {
       if (e.target.files[0]) favicon = await iconFromFile(e.target.files[0]);

@@ -117,6 +117,12 @@ const date = (t) =>
   new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric" }).format(
     new Date(t),
   );
+const roleLabels = {
+  owner: "所有者",
+  editor: "编辑者",
+  reviewer: "审阅者",
+  viewer: "查看者",
+};
 const counts = () => ({
   all: decks.filter((d) => !d.deletedAt && d.kind !== "template").length,
   templates: decks.filter((d) => !d.deletedAt && d.kind === "template").length,
@@ -233,7 +239,7 @@ function shell() {
     )
     .join(
       "",
-    )}</nav><div class="account"><button id="accountSettings" class="account-name" aria-label="账号设置"><span class="avatar">${esc(session.username[0].toUpperCase())}</span><span>${esc(session.username)}<small>管理员</small></span></button><button id="logout" class="icon-button" aria-label="退出登录" title="退出登录">${icon("logOut")}</button></div></aside><main class="library"><header class="library-header"><div><p class="eyebrow">我的空间</p><h1>${{ all: "文稿", templates: "模板", trash: "回收站" }[filter]}</h1></div><div class="header-actions">${filter === "trash" ? `<button class="button danger" id="emptyTrashBtn" ${n.trash ? "" : "disabled"}>${icon("trash2")}清空回收站</button>` : `<button class="button" id="importBtn">${icon("upload")}导入</button><button class="button primary" id="newBtn">${icon("plus")}${filter === "templates" ? "新建模板" : "新建文稿"}</button>`}</div></header>${
+    )}</nav><div class="account"><button id="accountSettings" class="account-name" aria-label="账号设置"><span class="avatar">${esc(session.username[0].toUpperCase())}</span><span>${esc(session.username)}<small>${roleLabels[session.role] || "成员"}</small></span></button><button id="logout" class="icon-button" aria-label="退出登录" title="退出登录">${icon("logOut")}</button></div></aside><main class="library"><header class="library-header"><div><p class="eyebrow">我的空间</p><h1>${{ all: "文稿", templates: "模板", trash: "回收站" }[filter]}</h1></div><div class="header-actions">${["reviewer", "viewer"].includes(session.role) ? "" : filter === "trash" ? `<button class="button danger" id="emptyTrashBtn" ${n.trash ? "" : "disabled"}>${icon("trash2")}清空回收站</button>` : `<button class="button" id="importBtn">${icon("upload")}导入</button><button class="button primary" id="newBtn">${icon("plus")}${filter === "templates" ? "新建模板" : "新建文稿"}</button>`}</div></header>${
     filter === "trash"
       ? `<div class="trash-kind-tabs" role="tablist" aria-label="回收站内容类型">${[
           ["all", "全部"],
@@ -344,19 +350,24 @@ function shell() {
 }
 function cardMarkup(d) {
   const template = d.kind === "template",
-    type = template ? "模板" : "文稿";
+    type = template ? "模板" : "文稿",
+    readOnly = ["reviewer", "viewer"].includes(session.role);
   const present = `/present/${d.slug}`,
     edit = `/edit/${d.slug}`;
-  const open = edit;
-  const menu = d.deletedAt
-    ? `<button data-action="restore" data-id="${d.id}">${icon("rotateCcw")}恢复</button><button class="danger" data-action="permanent" data-id="${d.id}">${icon("trash2")}永久删除</button>`
-    : `<button data-action="settings" data-id="${d.id}">${icon("settings2")}${type}设置</button><button data-action="history" data-id="${d.id}">${icon("clock3")}版本历史</button><button data-action="${template ? "duplicate-template" : "save-template"}" data-id="${d.id}">${icon("copy")}${template ? "复制模板" : "另存为模板"}</button><button data-action="export" data-id="${d.id}">${icon("download")}导出</button><button class="danger" data-action="trash" data-id="${d.id}">${icon("trash2")}移至回收站</button>`;
-  const actions = d.deletedAt
-    ? `<button class="button subtle" data-action="restore" data-id="${d.id}">${icon("rotateCcw")}恢复${type}</button><button class="icon-button danger" data-action="permanent" data-id="${d.id}" aria-label="永久删除${type} ${esc(d.title)}" title="永久删除">${icon("trash2")}</button>`
-    : template
-      ? `<button class="present-link" data-action="use-template" data-id="${d.id}">${icon("plus")}使用模板</button><div><a href="${edit}" class="icon-button" aria-label="编辑模板 ${esc(d.title)}" title="编辑模板">${icon("pencil")}</a><a href="${present}" target="_blank" rel="noopener" class="icon-button" aria-label="预览模板 ${esc(d.title)}" title="预览">${icon("presentation")}</a></div>`
-      : `<a href="${present}" class="present-link" target="_blank" rel="noopener noreferrer" aria-label="演示 ${esc(d.title)}（新标签页）">${icon("presentation")}演示</a><div><a href="${edit}" class="icon-button" aria-label="编辑 ${esc(d.title)}" title="编辑">${icon("pencil")}</a><button class="icon-button" data-action="share" data-id="${d.id}" aria-label="分享 ${esc(d.title)}" title="权限与分享">${icon("link")}</button></div>`;
-  return `<article class="deck-card" data-id="${d.id}">${d.deletedAt ? "" : `<a class="preview-link" href="${open}" aria-label="${template ? "编辑模板：" : "编辑文稿："}${esc(d.title)}"></a>`}<div class="deck-preview">${d.deletedAt ? `<div class="archived-cover">${icon(template ? "overview" : "presentation")}<h2>${esc(d.title)}</h2></div>` : `<iframe src="/api/decks/${d.id}/thumbnail" title="${esc(d.title)}封面" tabindex="-1" loading="lazy" sandbox="allow-same-origin"></iframe>`}<span class="page-count">${d.slideCount} ${template ? "种版式" : "页"}</span></div><div class="card-info"><div class="card-title-row"><h2 title="${esc(d.title)}">${esc(d.title)}</h2><details class="card-more"><summary aria-label="更多操作">${icon("more")}</summary><div class="card-menu">${menu}</div></details></div><div class="card-meta"><span class="badge ${d.visibility === "shared" ? "shared" : ""}">${icon(template ? "overview" : d.visibility === "shared" ? "link" : "lockKeyhole")}${template ? (d.builtin ? "内置模板" : "自定义模板") : d.visibility === "shared" ? "链接分享" : "私有"}</span><span>${date(d.updatedAt)} 更新</span></div><div class="card-actions">${actions}</div></div></article>`;
+  const open = present;
+  const menu = readOnly
+    ? `<button data-action="history" data-id="${d.id}">${icon("clock3")}版本历史</button><button data-action="export" data-id="${d.id}">${icon("download")}导出</button>`
+    : d.deletedAt
+      ? `<button data-action="restore" data-id="${d.id}">${icon("rotateCcw")}恢复</button><button class="danger" data-action="permanent" data-id="${d.id}">${icon("trash2")}永久删除</button>`
+      : `<button data-action="settings" data-id="${d.id}">${icon("settings2")}${type}设置</button><button data-action="history" data-id="${d.id}">${icon("clock3")}版本历史</button><button data-action="${template ? "duplicate-template" : "save-template"}" data-id="${d.id}">${icon("copy")}${template ? "复制模板" : "另存为模板"}</button><button data-action="export" data-id="${d.id}">${icon("download")}导出</button><button class="danger" data-action="trash" data-id="${d.id}">${icon("trash2")}移至回收站</button>`;
+  const actions = readOnly
+    ? `<a href="${present}" class="present-link" target="_blank" rel="noopener noreferrer">${icon("presentation")}${template ? "预览" : "演示"}</a>`
+    : d.deletedAt
+      ? `<button class="button subtle" data-action="restore" data-id="${d.id}">${icon("rotateCcw")}恢复${type}</button><button class="icon-button danger" data-action="permanent" data-id="${d.id}" aria-label="永久删除${type} ${esc(d.title)}" title="永久删除">${icon("trash2")}</button>`
+      : template
+        ? `<button class="present-link" data-action="use-template" data-id="${d.id}">${icon("plus")}使用模板</button><div><a href="${edit}" class="icon-button" aria-label="编辑模板 ${esc(d.title)}" title="编辑模板">${icon("pencil")}</a><a href="${present}" target="_blank" rel="noopener" class="icon-button" aria-label="预览模板 ${esc(d.title)}" title="预览">${icon("presentation")}</a></div>`
+        : `<a href="${present}" class="present-link" target="_blank" rel="noopener noreferrer" aria-label="演示 ${esc(d.title)}（新标签页）">${icon("presentation")}演示</a><div><a href="${edit}" class="icon-button" aria-label="编辑 ${esc(d.title)}" title="编辑">${icon("pencil")}</a><button class="icon-button" data-action="share" data-id="${d.id}" aria-label="分享 ${esc(d.title)}" title="权限与分享">${icon("link")}</button></div>`;
+  return `<article class="deck-card" data-id="${d.id}">${d.deletedAt ? "" : `<a class="preview-link" href="${open}" target="_blank" rel="noopener" aria-label="${template ? "预览模板：" : "演示文稿："}${esc(d.title)}"></a>`}<div class="deck-preview">${d.deletedAt ? `<div class="archived-cover">${icon(template ? "overview" : "presentation")}<h2>${esc(d.title)}</h2></div>` : `<iframe src="/api/decks/${d.id}/thumbnail" title="${esc(d.title)}封面" tabindex="-1" loading="lazy" sandbox="allow-same-origin"></iframe>`}<span class="page-count">${d.slideCount} ${template ? "种版式" : "页"}</span></div><div class="card-info"><div class="card-title-row"><h2 title="${esc(d.title)}">${esc(d.title)}</h2><details class="card-more"><summary aria-label="更多操作">${icon("more")}</summary><div class="card-menu">${menu}</div></details></div><div class="card-meta"><span class="badge ${d.visibility === "shared" ? "shared" : ""}">${icon(template ? "overview" : d.visibility === "shared" ? "link" : "lockKeyhole")}${template ? (d.builtin ? "内置模板" : "自定义模板") : d.visibility === "shared" ? "链接分享" : "私有"}</span><span>${date(d.updatedAt)} 更新</span></div><div class="card-actions">${actions}</div></div></article>`;
 }
 function renderCards() {
   const list = decks.filter(

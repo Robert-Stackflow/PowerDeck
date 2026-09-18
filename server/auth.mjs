@@ -4,29 +4,91 @@ import { promisify } from "node:util";
 import { HttpError, requireValue } from "./content.mjs";
 import { hash, token } from "./store.mjs";
 const scrypt = promisify(crypto.scrypt);
+
 export async function passwordHash(password) {
   const salt = token();
   const key = await scrypt(password, salt, 64);
   return salt + ":" + key.toString("hex");
 }
 async function verify(password, encoded) {
-  const [salt, hex] = encoded.split(":");
-  const key = await scrypt(password, salt, 64);
-  const expected = Buffer.from(hex, "hex");
+  const [salt, hex] = String(encoded || "").split(":");
+  if (!salt || !hex) return false;
+  const key = await scrypt(password, salt, 64),
+    expected = Buffer.from(hex, "hex");
   return (
     expected.length === key.length && crypto.timingSafeEqual(expected, key)
   );
 }
+
 export function createAuth(
   store,
   { secure = false, dataDir, origin, site } = {},
 ) {
   const { db } = store,
     attempts = new Map();
+  db.exec(`CREATE TABLE IF NOT EXISTS workspace_users(
+      id TEXT PRIMARY KEY,username TEXT NOT NULL UNIQUE,password TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('owner','editor','reviewer','viewer')),
+      created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,disabled_at INTEGER
+    );`);
+  const sessionColumns = db.prepare("PRAGMA table_info(sessions)").all();
+  if (!sessionColumns.some((column) => column.name === "user_id"))
+    db.exec("ALTER TABLE sessions ADD COLUMN user_id TEXT");
+  if (!sessionColumns.some((column) => column.name === "role"))
+    db.exec("ALTER TABLE sessions ADD COLUMN role TEXT");
   const admin = () => db.prepare("SELECT * FROM admin WHERE id=1").get();
+  const syncOwner = () => {
+    const legacy = admin();
+    if (!legacy) return null;
+    let value = db
+      .prepare("SELECT * FROM workspace_users WHERE role='owner' LIMIT 1")
+      .get();
+    if (!value) {
+      const id = crypto.randomUUID(),
+        now = Date.now();
+      db.prepare(
+        "INSERT INTO workspace_users(id,username,password,role,created_at,updated_at) VALUES(?,?,?,'owner',?,?)",
+      ).run(id, legacy.username, legacy.password, now, now);
+      value = db.prepare("SELECT * FROM workspace_users WHERE id=?").get(id);
+    } else if (
+      value.username !== legacy.username ||
+      value.password !== legacy.password
+    ) {
+      db.prepare(
+        "UPDATE workspace_users SET username=?,password=?,updated_at=? WHERE id=?",
+      ).run(legacy.username, legacy.password, Date.now(), value.id);
+      value = db
+        .prepare("SELECT * FROM workspace_users WHERE id=?")
+        .get(value.id);
+    }
+    db.prepare(
+      "UPDATE sessions SET user_id=?,role='owner' WHERE user_id IS NULL",
+    ).run(value.id);
+    return value;
+  };
+  syncOwner();
+  const userById = (id) =>
+    id
+      ? db
+          .prepare(
+            "SELECT * FROM workspace_users WHERE id=? AND disabled_at IS NULL",
+          )
+          .get(id)
+      : null;
+  const owner = () => syncOwner();
+  const userDTO = (row) =>
+    row && {
+      id: row.id,
+      username: row.username,
+      role: row.role,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      disabledAt: row.disabled_at,
+    };
   function limit(ip) {
     const now = Date.now();
-    for (const [k, v] of attempts) if (v.until < now) attempts.delete(k);
+    for (const [key, value] of attempts)
+      if (value.until < now) attempts.delete(key);
     const bucket = attempts.get(ip) || { count: 0, until: now + 300000 };
     if (bucket.count >= 10)
       throw new HttpError(429, "尝试次数过多，请五分钟后再试");
@@ -36,31 +98,37 @@ export function createAuth(
   const session = (req) => {
     const raw = (req.headers.cookie || "")
       .split(";")
-      .map((x) => x.trim())
-      .find((x) => x.startsWith("deck_session="))
+      .map((value) => value.trim())
+      .find((value) => value.startsWith("deck_session="))
       ?.slice(13);
     if (!raw) return null;
-    return (
-      db
-        .prepare("SELECT * FROM sessions WHERE hash=? AND expires>?")
-        .get(hash(raw), Date.now()) || null
-    );
+    const value = db
+      .prepare("SELECT * FROM sessions WHERE hash=? AND expires>?")
+      .get(hash(raw), Date.now());
+    if (!value) return null;
+    const user = userById(value.user_id) || (value.user_id ? null : owner());
+    return user ? { ...value, user } : null;
   };
-  function issue(res) {
-    const t = token(),
+  function issue(res, selected = owner()) {
+    requireValue(selected && !selected.disabled_at, "账号不可用");
+    const value = token(),
       csrf = token(),
       expires = Date.now() + 7 * 86400000;
     db.prepare("DELETE FROM sessions WHERE expires<=?").run(Date.now());
-    db.prepare("INSERT INTO sessions VALUES(?,?,?)").run(
-      hash(t),
-      csrf,
-      expires,
-    );
+    db.prepare(
+      "INSERT INTO sessions(hash,csrf,expires,user_id,role) VALUES(?,?,?,?,?)",
+    ).run(hash(value), csrf, expires, selected.id, selected.role);
     res.setHeader(
       "Set-Cookie",
-      `deck_session=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${secure ? "; Secure" : ""}`,
+      `deck_session=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${secure ? "; Secure" : ""}`,
     );
-    return { authenticated: true, username: admin().username, csrf };
+    return {
+      authenticated: true,
+      userId: selected.id,
+      username: selected.username,
+      role: selected.role,
+      csrf,
+    };
   }
   const credentials = (data) => {
     requireValue(
@@ -76,11 +144,15 @@ export function createAuth(
     );
   };
   const resetLimit = (req) => attempts.delete(req.socket.remoteAddress);
-  const verifyPassword = async (password) =>
-    typeof password === "string" &&
-    password.length <= 128 &&
-    !!admin() &&
-    verify(password, admin().password);
+  const verifyPassword = async (password) => {
+    const selected = owner();
+    return (
+      typeof password === "string" &&
+      password.length <= 128 &&
+      !!selected &&
+      verify(password, selected.password)
+    );
+  };
   const security = createSecurity({
     db,
     dataDir,
@@ -92,27 +164,41 @@ export function createAuth(
     limit,
     resetLimit,
     verifyPassword,
+    userById,
   });
+  const requireSession = (req) => {
+    const value = session(req);
+    if (!value) throw new HttpError(401, "请先登录");
+    if (
+      !["GET", "HEAD"].includes(req.method) &&
+      req.headers["x-csrf-token"] !== value.csrf
+    )
+      throw new HttpError(403, "请求验证失败，请刷新后重试");
+    return value;
+  };
   return {
     security,
-    status: (req) => {
-      const a = admin(),
-        s = session(req);
+    status(req) {
+      const value = session(req);
       return {
-        setupRequired: !a,
-        authenticated: !!s,
-        ...(s ? { username: a.username, csrf: s.csrf } : {}),
+        setupRequired: !admin(),
+        authenticated: !!value,
+        ...(value
+          ? {
+              userId: value.user.id,
+              username: value.user.username,
+              role: value.user.role,
+              csrf: value.csrf,
+            }
+          : {}),
       };
     },
-    require: (req) => {
-      const s = session(req);
-      if (!s) throw new HttpError(401, "请先登录");
-      if (
-        !["GET", "HEAD"].includes(req.method) &&
-        req.headers["x-csrf-token"] !== s.csrf
-      )
-        throw new HttpError(403, "请求验证失败，请刷新后重试");
-      return s;
+    require: requireSession,
+    requireRole(req, ...roles) {
+      const value = requireSession(req);
+      if (!roles.includes(value.user.role))
+        throw new HttpError(403, "当前账号没有执行此操作的权限");
+      return value;
     },
     setup: async (req, res, data) => {
       if (admin()) throw new HttpError(409, "管理员已设置");
@@ -127,7 +213,7 @@ export function createAuth(
       const encoded = await passwordHash(data.password);
       if (admin()) throw new HttpError(409, "管理员已设置");
       db.prepare("INSERT INTO admin VALUES(1,?,?)").run(data.username, encoded);
-      return issue(res);
+      return issue(res, syncOwner());
     },
     login: async (req, res, data) => {
       limit(req.socket.remoteAddress);
@@ -137,18 +223,22 @@ export function createAuth(
           data.password.length <= 128,
         "账号或密码不正确",
       );
-      const a = admin();
-      if (
-        !a ||
-        data.username !== a.username ||
-        !(await verify(data.password, a.password))
-      )
+      syncOwner();
+      const selected = db
+        .prepare(
+          "SELECT * FROM workspace_users WHERE username=? AND disabled_at IS NULL",
+        )
+        .get(data.username);
+      if (!selected || !(await verify(data.password, selected.password)))
         throw new HttpError(401, "账号或密码不正确");
-      return security.finish(req, res);
+      if (selected.role === "owner") return security.finish(req, res, selected);
+      resetLimit(req);
+      return issue(res, selected);
     },
     logout: (req, res) => {
-      const s = session(req);
-      if (s) db.prepare("DELETE FROM sessions WHERE hash=?").run(s.hash);
+      const value = session(req);
+      if (value)
+        db.prepare("DELETE FROM sessions WHERE hash=?").run(value.hash);
       res.setHeader(
         "Set-Cookie",
         `deck_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure ? "; Secure" : ""}`,
@@ -156,15 +246,91 @@ export function createAuth(
       return { ok: true };
     },
     changePassword: async (req, res, data) => {
-      const a = admin();
-      credentials({ username: a.username, password: data.password });
-      await security.confirm(req, data);
-      db.prepare("UPDATE admin SET password=? WHERE id=1").run(
-        await passwordHash(data.password),
-      );
-      db.prepare("DELETE FROM sessions").run();
+      const value = requireSession(req),
+        selected = value.user;
+      credentials({ username: selected.username, password: data.password });
+      if (selected.role === "owner") await security.confirm(req, data);
+      else if (!(await verify(data.currentPassword, selected.password)))
+        throw new HttpError(401, "当前密码不正确");
+      const encoded = await passwordHash(data.password);
+      db.prepare(
+        "UPDATE workspace_users SET password=?,updated_at=? WHERE id=?",
+      ).run(encoded, Date.now(), selected.id);
+      if (selected.role === "owner")
+        db.prepare("UPDATE admin SET password=? WHERE id=1").run(encoded);
+      db.prepare("DELETE FROM sessions WHERE user_id=?").run(selected.id);
       security.clearPending();
-      return issue(res);
+      return issue(res, userById(selected.id));
+    },
+    users() {
+      syncOwner();
+      return db
+        .prepare(
+          "SELECT * FROM workspace_users ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END,created_at",
+        )
+        .all()
+        .map(userDTO);
+    },
+    async createUser(input) {
+      credentials(input);
+      requireValue(
+        ["editor", "reviewer", "viewer"].includes(input.role),
+        "角色不正确",
+      );
+      const id = crypto.randomUUID(),
+        now = Date.now();
+      try {
+        db.prepare(
+          "INSERT INTO workspace_users(id,username,password,role,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+        ).run(
+          id,
+          input.username,
+          await passwordHash(input.password),
+          input.role,
+          now,
+          now,
+        );
+      } catch (error) {
+        if (String(error.message).includes("UNIQUE"))
+          throw new HttpError(409, "账号名称已存在");
+        throw error;
+      }
+      return userDTO(userById(id));
+    },
+    updateUser(id, input) {
+      const selected = db
+        .prepare("SELECT * FROM workspace_users WHERE id=?")
+        .get(id);
+      if (!selected) throw new HttpError(404, "成员不存在");
+      if (selected.role === "owner")
+        throw new HttpError(409, "所有者账号不能在此修改");
+      requireValue(
+        ["editor", "reviewer", "viewer"].includes(input.role),
+        "角色不正确",
+      );
+      db.prepare(
+        "UPDATE workspace_users SET role=?,disabled_at=?,updated_at=? WHERE id=?",
+      ).run(
+        input.role,
+        input.disabled === true ? Date.now() : null,
+        Date.now(),
+        id,
+      );
+      db.prepare("DELETE FROM sessions WHERE user_id=?").run(id);
+      return userDTO(
+        db.prepare("SELECT * FROM workspace_users WHERE id=?").get(id),
+      );
+    },
+    deleteUser(id) {
+      const selected = db
+        .prepare("SELECT * FROM workspace_users WHERE id=?")
+        .get(id);
+      if (!selected) throw new HttpError(404, "成员不存在");
+      if (selected.role === "owner")
+        throw new HttpError(409, "不能删除工作区所有者");
+      db.prepare("DELETE FROM sessions WHERE user_id=?").run(id);
+      db.prepare("DELETE FROM workspace_users WHERE id=?").run(id);
+      return { ok: true };
     },
   };
 }
