@@ -2119,20 +2119,39 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   z-index: 38;
   left: max(22px, env(safe-area-inset-left));
   bottom: calc(92px + env(safe-area-inset-bottom));
-  width: min(370px, calc(100vw - 44px));
+  width: min(330px, calc(100vw - 44px));
   max-height: min(46vh, 480px);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 7px;
   overflow: visible;
   background: transparent !important;
   color: #edf6f1;
   pointer-events: none;
+  transition:
+    width 0.28s cubic-bezier(0.22, 0.78, 0.22, 1),
+    bottom 0.28s cubic-bezier(0.22, 0.78, 0.22, 1);
+}
+.room-feed-expanded {
+  width: 100%;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transform-origin: bottom left;
+  visibility: visible;
+  transition:
+    opacity 0.2s ease,
+    transform 0.28s cubic-bezier(0.22, 0.78, 0.22, 1),
+    visibility 0s;
 }
 .room-feed-toggle {
+  width: 124px;
   min-width: 0;
   height: 32px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 7px;
+  margin: 0;
   padding: 0 10px;
   border: 1px solid #ffffff17;
   border-radius: 999px;
@@ -2142,11 +2161,11 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   backdrop-filter: blur(16px);
   pointer-events: auto;
   cursor: pointer;
-}
-.room-feed-toggle > svg {
-  width: 14px;
-  height: 14px;
-  color: #72cda6;
+  transition:
+    width 0.28s cubic-bezier(0.22, 0.78, 0.22, 1),
+    height 0.28s cubic-bezier(0.22, 0.78, 0.22, 1),
+    border-radius 0.28s ease,
+    background 0.2s ease;
 }
 .room-feed-toggle > span {
   display: flex;
@@ -2179,31 +2198,44 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   display: none;
 }
 .room-live-feed.collapsed {
-  width: 68px;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: 54px;
   max-height: none;
 }
 .room-live-feed.collapsed .room-feed-expanded {
-  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 320px;
+  opacity: 0;
+  transform: translateY(12px) scale(0.82);
+  visibility: hidden;
+  transition:
+    opacity 0.16s ease,
+    transform 0.24s cubic-bezier(0.4, 0, 1, 1),
+    visibility 0s 0.24s;
 }
 .room-live-feed.status-only .room-feed-expanded {
-  display: none;
+  visibility: hidden;
 }
 .room-live-feed.collapsed .room-feed-toggle {
   position: relative;
-  width: 64px;
-  height: 64px;
+  width: 52px;
+  height: 52px;
   display: grid;
   place-items: center;
   align-content: center;
   gap: 2px;
   margin: 0;
-  padding: 7px;
+  padding: 5px;
   border-radius: 50%;
-  background: #101820e8;
-}
-.room-live-feed.collapsed .room-feed-toggle > svg {
-  width: 17px;
-  height: 17px;
+  background: #101820ed;
+  transform: scale(1);
+  transition:
+    width 0.28s cubic-bezier(0.22, 0.78, 0.22, 1),
+    height 0.28s cubic-bezier(0.22, 0.78, 0.22, 1),
+    border-radius 0.28s ease,
+    transform 0.2s ease;
 }
 .room-live-feed.collapsed .room-feed-toggle > span {
   display: grid;
@@ -2212,9 +2244,11 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .room-live-feed.collapsed .room-feed-toggle b {
   font-size: 9px;
+  line-height: 1.1;
 }
 .room-live-feed.collapsed .room-feed-toggle em {
   font-size: 7px;
+  line-height: 1.1;
 }
 .room-live-feed.collapsed .room-feed-unread {
   position: absolute;
@@ -2270,7 +2304,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .room-feed-composer {
   position: relative;
-  width: min(100%, 350px);
+  width: min(100%, 304px);
   display: flex;
   align-items: center;
   gap: 5px;
@@ -2297,8 +2331,8 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   color: #91a099;
 }
 .room-feed-composer > button {
-  width: 31px;
-  height: 31px;
+  width: 33px;
+  height: 33px;
   flex: none;
   display: grid;
   place-items: center;
@@ -2308,6 +2342,11 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   background: transparent;
   color: #bdcbc4;
   cursor: pointer;
+}
+.room-feed-composer .room-emoji-toggle svg {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 .room-feed-composer > button:hover {
   background: #ffffff10;
@@ -2325,27 +2364,42 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
-  display: grid;
-  grid-template-columns: repeat(6, 34px);
-  gap: 3px;
-  padding: 7px;
+  width: 254px;
+  display: block;
+  padding: 10px;
   border: 1px solid #ffffff1a;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #101820f2;
   box-shadow: 0 12px 36px #0005;
   backdrop-filter: blur(20px);
+}
+.room-emoji-picker header {
+  margin-bottom: 7px;
+  padding: 0 3px;
+  color: #aebdb5;
+  font-size: 10px;
+  font-weight: 650;
+}
+.room-emoji-picker > div {
+  max-height: 202px;
+  display: grid;
+  grid-template-columns: repeat(6, 36px);
+  gap: 3px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .room-emoji-picker[hidden] {
   display: none;
 }
 .room-emoji-picker button {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 0;
   border-radius: 8px;
   background: transparent;
-  font-size: 19px;
+  font-size: 20px;
+  line-height: 1;
   cursor: pointer;
 }
 .room-emoji-picker button:hover {
@@ -2542,6 +2596,205 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .room-actions button svg {
   width: 16px;
+}
+.room-poll-popover {
+  position: fixed;
+  z-index: 54;
+  left: 50%;
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  width: min(500px, calc(100vw - 28px));
+  max-height: min(68dvh, 620px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #ffffff1d;
+  border-radius: 20px;
+  background: #101820f2;
+  color: #eef5f1;
+  box-shadow: 0 22px 68px #0007;
+  backdrop-filter: blur(26px) saturate(1.25);
+  transform: translateX(-50%);
+  animation: room-comment-in 0.18s ease-out both;
+}
+.room-poll-popover[hidden] {
+  display: none;
+}
+.room-poll-popover-head {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex: none;
+  padding: 10px 12px 10px 17px;
+  border-bottom: 1px solid #ffffff10;
+}
+.room-poll-popover-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.room-poll-popover-head b {
+  font-size: 13px;
+}
+.room-poll-popover-head span {
+  color: #8fa099;
+  font-size: 9px;
+}
+.room-poll-popover-head button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: #ffffff09;
+  color: #a8b6af;
+  cursor: pointer;
+}
+.room-poll-popover-head button:hover {
+  background: #ffffff12;
+  color: white;
+}
+.room-poll-popover-head svg {
+  width: 17px;
+}
+#roomPollBody {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff2b transparent;
+}
+.room-poll-card-list {
+  min-width: 0;
+  display: grid;
+  gap: 11px;
+  padding: 12px;
+}
+.room-poll-card {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid #ffffff12;
+  border-radius: 15px;
+  background: linear-gradient(145deg, #18242ce8, #131d24e8);
+  box-shadow: inset 0 1px #ffffff08;
+}
+.room-poll-card.is-open {
+  border-color: #68c79d38;
+}
+.room-poll-card header {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+.room-poll-card header > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.room-poll-card header span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #ffffff0c;
+  color: #aab8b1;
+  font-size: 8px;
+}
+.room-poll-card.is-open header span {
+  background: #62c6981b;
+  color: #82dab4;
+}
+.room-poll-card header small,
+.room-poll-card footer {
+  color: #819189;
+  font-size: 9px;
+}
+.room-poll-card h3 {
+  margin: 0;
+  color: #edf4f0;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.room-poll-card-options {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+.room-poll-card-options button {
+  position: relative;
+  min-width: 0;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  padding: 0 12px;
+  border: 1px solid #ffffff12;
+  border-radius: 11px;
+  background: #ffffff07;
+  color: #dce6e1;
+  text-align: left;
+  cursor: pointer;
+}
+.room-poll-card-options button:not(:disabled):hover {
+  border-color: #6bc69f70;
+  background: #6bc69f12;
+}
+.room-poll-card-options button:disabled {
+  cursor: default;
+}
+.room-poll-card-options button i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #63bd9622;
+}
+.room-poll-card-options button span,
+.room-poll-card-options button b,
+.room-poll-card-options button em {
+  position: relative;
+  z-index: 1;
+}
+.room-poll-card-options button span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.room-poll-card-options button b {
+  color: #8dd6b6;
+  font-size: 10px;
+}
+.room-poll-card-options button em {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: 1px solid #83948c;
+  border-radius: 50%;
+}
+.room-poll-empty {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  color: #82928a;
+}
+.room-poll-empty svg {
+  width: 27px;
+}
+.room-poll-empty b {
+  color: #dce7e2;
+  font-size: 13px;
+}
+.room-poll-empty span {
+  font-size: 9px;
 }
 .room-interaction-overlay .session-dialog-card {
   width: min(620px, calc(100vw - 48px));
@@ -3148,7 +3401,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .room-poll-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
+  gap: 20px;
   min-width: 0;
 }
 .room-poll-layout > * {
@@ -3163,9 +3416,18 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .room-poll-history-list {
   min-height: 0;
   display: grid;
-  gap: 10px;
+  gap: 14px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 2px 6px 10px 0;
+}
+.room-poll-history .audience-live-poll {
+  padding: 16px;
+}
+.room-poll-history .poll-heading {
+  margin-bottom: 13px;
+}
+.room-poll-history .poll-result-list {
+  gap: 11px;
 }
 .poll-result > p {
   display: flex;
@@ -3218,6 +3480,12 @@ body[data-tool="pointer"] #stage [data-editor-href] {
     bottom: calc(96px + env(safe-area-inset-bottom));
     width: min(350px, calc(100vw - 24px));
     max-height: 38vh;
+  }
+  .room-poll-popover {
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    width: calc(100vw - 20px);
+    max-height: min(68dvh, 560px);
+    border-radius: 17px;
   }
   .room-online {
     top: max(10px, env(safe-area-inset-top));

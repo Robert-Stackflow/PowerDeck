@@ -31,6 +31,7 @@ const names = {
   presenter: "Monitor",
   smartphone: "Smartphone",
   audience: "MessageSquare",
+  smile: "Smile",
   room: "RadioTower",
   flag: "Flag",
 };
