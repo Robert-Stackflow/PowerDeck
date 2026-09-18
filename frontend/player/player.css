@@ -1617,9 +1617,16 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 .audience-session-setup {
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 12px;
   min-height: 160px;
   border: 1px dashed #d7ded9;
   border-radius: 14px;
+}
+.audience-session-setup p {
+  margin: 0;
+  color: #85928c;
+  font-size: 12px;
 }
 .audience-session-setup button {
   min-height: 44px;

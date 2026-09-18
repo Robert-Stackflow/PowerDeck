@@ -104,6 +104,7 @@ export function mountPresenter({
     audienceSession = null,
     remoteInterval = 0,
     audienceInterval = 0,
+    audienceStarting = false,
     lastRemoteCommand = 0,
     remoteBusy = false;
   const sessionRequest = async (path, options = {}) => {
@@ -328,7 +329,7 @@ export function mountPresenter({
   ui.innerHTML =
     '<button id="dockReveal" aria-label="显示演示工具"></button><div id="toolMenu" class="presenter-menu" role="menu" aria-label="指针与墨迹" hidden></div><div id="contextMenu" class="presenter-menu" role="menu" aria-label="演示菜单" hidden></div><div id="moreMenu" class="presenter-menu" role="menu" aria-label="更多操作" hidden></div><div id="laserDot"></div><div id="eraserCursor"></div>' +
     (presenterURL
-      ? `<section id="remoteControlPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="session-dialog-card remote-session-card"><div class="overlay-head"><div><p class="session-kicker">演讲辅助</p><h2 id="remoteControlTitle">手机遥控</h2><span>扫码连接后即可控制演示</span></div><button class="dialog-close" type="button" data-close="remoteControlPanel" aria-label="关闭手机遥控">${ico("close")}</button></div><div id="remoteSessionBody" class="session-loading">正在创建遥控会话…</div></div></section><section id="audiencePanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="audienceTitle"><div class="session-dialog-card audience-session-card"><div class="overlay-head"><div><p class="session-kicker">现场互动</p><h2 id="audienceTitle">观众互动</h2><span>提问、投票、评分</span></div><button class="dialog-close" type="button" data-close="audiencePanel" aria-label="关闭观众互动">${ico("close")}</button></div><div id="audienceSetup" class="audience-session-setup"><button id="startAudience" type="button">开启观众互动</button></div><div id="audienceDashboard" hidden></div></div></section>`
+      ? `<section id="remoteControlPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="session-dialog-card remote-session-card"><div class="overlay-head"><div><p class="session-kicker">演讲辅助</p><h2 id="remoteControlTitle">手机遥控</h2><span>扫码连接后即可控制演示</span></div><button class="dialog-close" type="button" data-close="remoteControlPanel" aria-label="关闭手机遥控">${ico("close")}</button></div><div id="remoteSessionBody" class="session-loading">正在创建遥控会话…</div></div></section><section id="audiencePanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="audienceTitle"><div class="session-dialog-card audience-session-card"><div class="overlay-head"><div><p class="session-kicker">现场互动</p><h2 id="audienceTitle">观众互动</h2><span>提问、投票、评分</span></div><button class="dialog-close" type="button" data-close="audiencePanel" aria-label="关闭观众互动">${ico("close")}</button></div><div id="audienceSetup" class="session-loading">正在开启观众互动…</div><div id="audienceDashboard" hidden></div></div></section>`
       : "");
   document.body.append(ui);
   const fv = document.createElement("aside");
@@ -1073,14 +1074,17 @@ export function mountPresenter({
     }
   }
   async function startAudience() {
-    const button = $("startAudience");
-    button.disabled = true;
+    if (audienceSession || audienceStarting) return;
+    audienceStarting = true;
+    const setup = $("audienceSetup");
+    setup.className = "session-loading";
+    setup.textContent = "正在开启观众互动…";
     try {
       audienceSession = await sessionRequest("/audience-sessions", {
         method: "POST",
         body: { deckId },
       });
-      $("audienceSetup").hidden = true;
+      setup.hidden = true;
       $("audienceDashboard").hidden = false;
       renderAudienceDashboard();
       audienceInterval ||= hostWindow.setInterval(async () => {
@@ -1095,9 +1099,18 @@ export function mountPresenter({
         } catch {}
       }, 1800);
     } catch (error) {
-      button.disabled = false;
+      setup.hidden = false;
+      setup.className = "audience-session-setup";
+      setup.innerHTML = `<p>${escapeHTML(error.message)}</p><button id="retryAudience" type="button">重试</button>`;
+      $("retryAudience").onclick = startAudience;
       toast(error.message);
+    } finally {
+      audienceStarting = false;
     }
+  }
+  function openAudience() {
+    openPanel("audiencePanel");
+    startAudience();
   }
   function act(action) {
     if (action.startsWith("tool:")) {
@@ -1132,7 +1145,7 @@ export function mountPresenter({
         openRemoteControl();
         break;
       case "audience":
-        openPanel("audiencePanel");
+        openAudience();
         break;
       case "full":
         full();
@@ -1171,9 +1184,7 @@ export function mountPresenter({
     $("presenterViewBtn").onclick = () => act("presenter");
   if ($("remoteControlBtn"))
     $("remoteControlBtn").onclick = () => openRemoteControl();
-  if ($("audienceBtn"))
-    $("audienceBtn").onclick = () => openPanel("audiencePanel");
-  if ($("startAudience")) $("startAudience").onclick = startAudience;
+  if ($("audienceBtn")) $("audienceBtn").onclick = () => openAudience();
   if ($("editBtn"))
     $("editBtn").onclick = () => {
       hostWindow.location.href = editURL + "#" + current;
