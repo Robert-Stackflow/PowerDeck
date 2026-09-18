@@ -77,7 +77,7 @@ export async function mountVisualEditor({
           ["zoom", "轻微缩放"],
         ],
       },
-    )}</label><button type="button" class="button" id="applyTransitionAll">${icon("copy")}应用到全部页面</button><p id="transitionApplyStatus" class="transition-apply-status" role="status"></p></section><section class="layer-panel"><header><h2>图层</h2><span id="layerCount">0</span></header><div id="layerList"></div><footer><button type="button" class="icon-button" data-layer-action="front" title="置于顶层">${icon("arrowUp")}</button><button type="button" class="icon-button" data-layer-action="up" title="上移一层">${icon("chevronUp")}</button><button type="button" class="icon-button" data-layer-action="down" title="下移一层">${icon("chevronDown")}</button><button type="button" class="icon-button" data-layer-action="back" title="置于底层">${icon("arrowDown")}</button></footer></section>`,
+    )}</label><button type="button" class="button" id="applyTransitionAll">${icon("copy")}应用到全部页面</button><p id="transitionApplyStatus" class="transition-apply-status" role="status"></p></section><section class="layer-panel"><header><div class="layer-heading"><h2>图层</h2><span id="layerCount">0</span></div><div class="layer-actions"><button type="button" class="icon-button" data-layer-action="front" title="置于顶层" aria-label="置于顶层">${icon("arrowUp")}</button><button type="button" class="icon-button" data-layer-action="up" title="上移一层" aria-label="上移一层">${icon("chevronUp")}</button><button type="button" class="icon-button" data-layer-action="down" title="下移一层" aria-label="下移一层">${icon("chevronDown")}</button><button type="button" class="icon-button" data-layer-action="back" title="置于底层" aria-label="置于底层">${icon("arrowDown")}</button></div></header><div id="layerList"></div></section>`,
   );
   enhanceSelects($("#inspectorPagePanel"));
   let canvas,
@@ -804,7 +804,7 @@ export async function mountVisualEditor({
     const row = event.target.closest("[data-layer-index]");
     if (row) canvas.selectLayer(Number(row.dataset.layerIndex), event.shiftKey);
   };
-  $(".layer-panel footer").onclick = (event) => {
+  $(".layer-actions").onclick = (event) => {
     const button = event.target.closest("[data-layer-action]"),
       selected = [...root.querySelectorAll(".layer-row.selected")].at(-1);
     if (button && selected)
