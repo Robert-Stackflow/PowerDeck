@@ -23,6 +23,31 @@
     <div id="roomStatus" aria-live="polite">
       <i></i><span>正在连接房间</span>
     </div>
+    <main id="roomJoin" class="room-join" hidden>
+      <form id="roomJoinForm">
+        <span class="room-join-icon" aria-hidden="true">◎</span>
+        <p>加入房间</p>
+        <h1 id="roomJoinTitle">房间</h1>
+        <label
+          >你的称呼<input
+            name="name"
+            maxlength="40"
+            autocomplete="nickname"
+            placeholder="例如：小林"
+            required
+        /></label>
+        <label id="roomPasswordField" hidden
+          >房间密码<input
+            name="password"
+            type="password"
+            maxlength="128"
+            autocomplete="current-password"
+            placeholder="输入房主设置的密码"
+        /></label>
+        <output id="roomJoinError"></output>
+        <button type="submit">进入房间</button>
+      </form>
+    </main>
     <iframe
       id="playerFrame"
       title="房间"

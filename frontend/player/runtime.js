@@ -110,6 +110,8 @@ export function mountPresenter({
     roomSocket = null,
     roomTab = "settings",
     roomPointerTimer = 0,
+    roomPingInterval = 0,
+    roomLatency = null,
     remoteInterval = 0,
     audienceInterval = 0,
     audienceStarting = false,
@@ -363,7 +365,11 @@ export function mountPresenter({
         .querySelector("#dockTools")
         .insertAdjacentHTML(
           "beforeend",
-          dockButton("roomInteractionBtn", "audience", "互动"),
+          '<span class="nav-divider room-interaction-divider" aria-hidden="true"></span><div class="room-interaction-control-group" role="group" aria-label="房间互动">' +
+            dockButton("roomPollBtn", "chartNoAxesColumn", "投票") +
+            dockButton("roomCommentsBtn", "audience", "评论") +
+            dockButton("roomRatingBtn", "star", "评分") +
+            "</div>",
         );
     if (downloadURL)
       dock
@@ -379,14 +385,35 @@ export function mountPresenter({
   ui.innerHTML =
     '<button id="dockReveal" aria-label="显示演示工具"></button><div id="toolMenu" class="presenter-menu" role="menu" aria-label="指针与墨迹" hidden></div><div id="contextMenu" class="presenter-menu" role="menu" aria-label="演示菜单" hidden></div><div id="moreMenu" class="presenter-menu" role="menu" aria-label="更多操作" hidden></div><div id="laserDot"></div><div id="eraserCursor"></div><div id="roomPointer" aria-hidden="true"></div>' +
     (viewerMode
-      ? `${viewerPermissions.showOnlineCount ? `<div id="roomOnline" class="room-online">${ico("audience")}<b>1</b><span>人在线</span></div>` : ""}${viewerPermissions.interaction && viewerPermissions.showInteractionFeed ? `<aside id="roomLiveFeed" class="room-live-feed" aria-live="polite"><header><span><i></i>现场互动</span><button type="button" aria-label="收起互动列表">${ico("close")}</button></header><div id="roomFeedItems"><p>互动内容会显示在这里</p></div></aside>` : ""}`
+      ? `${viewerPermissions.showOnlineCount ? `<div id="roomOnline" class="room-online">${ico("audience")}<b>1 人在线</b><em>连接中</em></div>` : ""}${viewerPermissions.interaction && viewerPermissions.showInteractionFeed ? '<aside id="roomLiveFeed" class="room-live-feed" aria-live="polite"><div id="roomFeedItems"><p>互动内容会显示在这里</p></div></aside>' : ""}`
       : "") +
     (presenterURL
       ? `<section id="remoteControlPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="session-dialog-card remote-session-card"><div class="overlay-head"><div><p class="session-kicker">演讲辅助</p><h2 id="remoteControlTitle">手机遥控</h2><span>扫码连接后即可控制演示</span></div><button class="dialog-close" type="button" data-close="remoteControlPanel" aria-label="关闭手机遥控">${ico("close")}</button></div><div id="remoteSessionBody" class="session-loading">正在创建遥控会话…</div></div></section><section id="roomPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="roomTitle"><div class="session-dialog-card room-session-card"><div class="overlay-head"><div><p class="session-kicker">同步放映</p><h2 id="roomTitle">房间</h2><span>让观众同步观看当前演示</span></div><button class="dialog-close" type="button" data-close="roomPanel" aria-label="关闭房间">${ico("close")}</button></div><div id="roomBody" class="session-loading">正在创建房间…</div></div></section><section id="audiencePanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="audienceTitle"><div class="session-dialog-card audience-session-card"><div class="overlay-head"><div><p class="session-kicker">房间互动</p><h2 id="audienceTitle">观众互动</h2><span>评论、投票、评分</span></div><button class="dialog-close" type="button" data-close="audiencePanel" aria-label="关闭观众互动">${ico("close")}</button></div><div id="audienceSetup" class="session-loading">正在开启观众互动…</div><div id="audienceDashboard" hidden></div></div></section>`
       : viewerMode && interactionURL
-        ? `<section id="roomInteractionPanel" class="overlay session-overlay room-interaction-overlay" hidden role="dialog" aria-modal="true" aria-label="观众互动"><div class="session-dialog-card"><div class="overlay-head"><div><p class="session-kicker">房间</p><h2>观众互动</h2></div><button class="dialog-close" type="button" data-close="roomInteractionPanel" aria-label="关闭互动">${ico("close")}</button></div><iframe src="${escapeHTML(interactionURL)}" title="观众互动"></iframe></div></section>`
+        ? `<section id="roomInteractionPanel" class="overlay session-overlay room-interaction-overlay" hidden role="dialog" aria-modal="true" aria-label="房间互动"><div class="session-dialog-card"><div class="overlay-head"><div><p class="session-kicker">房间</p><h2 id="roomInteractionTitle">评论</h2></div><button class="dialog-close" type="button" data-close="roomInteractionPanel" aria-label="关闭互动">${ico("close")}</button></div><iframe data-base-url="${escapeHTML(interactionURL)}" title="房间互动"></iframe></div></section>`
         : "");
   document.body.append(ui);
+  if (viewerMode && interactionURL) {
+    const pollPanel = $("roomInteractionPanel");
+    pollPanel.id = "roomPollPanel";
+    pollPanel.setAttribute("aria-label", "投票");
+    pollPanel.querySelector("[data-close]").dataset.close = "roomPollPanel";
+    $("roomInteractionTitle").id = "roomPollTitle";
+    $("roomPollTitle").textContent = "投票";
+    for (const [id, title] of [
+      ["roomCommentPanel", "评论"],
+      ["roomRatingPanel", "评分"],
+    ])
+      ui.insertAdjacentHTML(
+        "beforeend",
+        `<section id="${id}" class="overlay session-overlay room-interaction-overlay" hidden role="dialog" aria-modal="true" aria-label="${title}"><div class="session-dialog-card"><div class="overlay-head"><div><p class="session-kicker">房间</p><h2>${title}</h2></div><button class="dialog-close" type="button" data-close="${id}" aria-label="关闭${title}">${ico("close")}</button></div><iframe data-base-url="${escapeHTML(interactionURL)}" title="${title}"></iframe></div></section>`,
+      );
+  }
+  if (presenterURL)
+    ui.insertAdjacentHTML(
+      "beforeend",
+      `<section id="roomHostCommentPanel" class="overlay session-overlay room-host-comment-overlay" hidden role="dialog" aria-modal="true" aria-label="发布评论"><div class="session-dialog-card"><div class="overlay-head"><div><p class="session-kicker">房间互动</p><h2>发布评论</h2><span>评论会以“房主”身份出现在互动列表</span></div><button class="dialog-close" type="button" data-close="roomHostCommentPanel" aria-label="关闭评论">${ico("close")}</button></div><form id="roomHostCommentForm"><label>评论内容<textarea name="body" maxlength="500" required placeholder="输入要发送给房间的内容…"></textarea></label><div><button type="button" data-close="roomHostCommentPanel">取消</button><button type="submit" class="session-primary">发布评论</button></div></form></div></section>`,
+    );
   const fv = document.createElement("aside");
   fv.id = "figureViewer";
   fv.className = "overlay";
@@ -421,7 +448,10 @@ export function mountPresenter({
       "remoteControlPanel",
       "audiencePanel",
       "roomPanel",
-      "roomInteractionPanel",
+      "roomPollPanel",
+      "roomCommentPanel",
+      "roomRatingPanel",
+      "roomHostCommentPanel",
     ].some((id) => $(id) && !$(id).hidden);
   const openMenu = () =>
     ["toolMenu", "contextMenu", "moreMenu"].map($).find((e) => !e.hidden);
@@ -614,7 +644,10 @@ export function mountPresenter({
       "remoteControlPanel",
       "audiencePanel",
       "roomPanel",
-      "roomInteractionPanel",
+      "roomPollPanel",
+      "roomCommentPanel",
+      "roomRatingPanel",
+      "roomHostCommentPanel",
     ]) {
       const el = $(id);
       clearTimeout(panelTimers.get(id));
@@ -929,7 +962,7 @@ export function mountPresenter({
       ? connections
           .map(
             (connection) =>
-              `<article><span class="connection-device-icon">${ico(/Mobile|iPhone|Android/i.test(connection.userAgent) ? "smartphone" : "monitor")}</span><div><b>${escapeHTML(connectionDevice(connection.userAgent))}</b><small title="${escapeHTML(connection.userAgent)}">${escapeHTML(connection.userAgent)}</small><em>设备 ${escapeHTML(connection.deviceId.slice(0, 8))} · ${escapeHTML(connection.ip)}</em></div><time>${new Date(connection.lastSeen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></article>`,
+              `<article><span class="connection-device-icon">${ico(/Mobile|iPhone|Android/i.test(connection.userAgent) ? "smartphone" : "monitor")}</span><div><b>${escapeHTML(connection.name || connectionDevice(connection.userAgent))}</b><small title="${escapeHTML(connection.userAgent)}">${escapeHTML(connection.name ? `${connectionDevice(connection.userAgent)} · ${connection.userAgent}` : connection.userAgent)}</small><em>设备 ${escapeHTML(connection.deviceId.slice(0, 8))} · ${escapeHTML(connection.ip)}</em></div><time>${new Date(connection.lastSeen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></article>`,
           )
           .join("")
       : '<p class="session-empty">等待设备连接</p>';
@@ -1017,9 +1050,102 @@ export function mountPresenter({
     if (list) list.innerHTML = connectionsMarkup(connections);
     if (count) count.textContent = `${connections.length} 人`;
     if (badge) badge.textContent = connections.length;
+    updateRoomPresence(connections.length, roomLatency);
+  }
+  function updateRoomPresence(count, latency = null) {
+    const online = $("roomOnline");
+    if (!online) return;
+    online.querySelector("b").textContent = `${Math.max(0, count || 0)} 人在线`;
+    const delay = online.querySelector("em");
+    if (delay)
+      delay.textContent = Number.isFinite(latency)
+        ? `${Math.round(latency)} ms`
+        : "连接中";
+  }
+  function ensureRoomChrome() {
+    if (!roomSession || viewerMode) return;
+    const shouldShowOnline = roomSession.permissions.showOnlineCount,
+      shouldShowFeed =
+        roomSession.permissions.interaction &&
+        roomSession.permissions.showInteractionFeed;
+    if (shouldShowOnline && !$("roomOnline"))
+      ui.insertAdjacentHTML(
+        "beforeend",
+        `<div id="roomOnline" class="room-online room-host-only">${ico("audience")}<b>0 人在线</b><em>连接中</em></div>`,
+      );
+    else if (!shouldShowOnline) $("roomOnline")?.remove();
+    if (shouldShowFeed && !$("roomLiveFeed"))
+      ui.insertAdjacentHTML(
+        "beforeend",
+        '<aside id="roomLiveFeed" class="room-live-feed room-host-only" aria-live="polite"><div id="roomFeedItems"><p>互动内容会显示在这里</p></div></aside>',
+      );
+    else if (!shouldShowFeed) $("roomLiveFeed")?.remove();
+    const group = dock.querySelector(".session-control-group");
+    if (roomSession.permissions.interaction && !$("roomHostCommentBtn")) {
+      group?.insertAdjacentHTML(
+        "beforeend",
+        dockButton("roomHostCommentBtn", "audience", "发布评论"),
+      );
+      $("roomHostCommentBtn").onclick = openHostComment;
+    } else if (!roomSession.permissions.interaction)
+      $("roomHostCommentBtn")?.remove();
+    updateRoomPresence(roomSession.connections?.length || 0, roomLatency);
+  }
+  function renderLiveFeed(feed) {
+    const list = $("roomFeedItems");
+    if (!list || !feed) return;
+    const poll = feed.poll,
+      comments = feed.comments || [];
+    list.innerHTML = `${poll ? `<button type="button" class="room-feed-poll"><span>${ico("chartNoAxesColumn")}投票</span><b>${escapeHTML(poll.question)}</b><small>${poll.status === "open" ? "点击参与" : "查看结果"} · ${poll.votes || 0} 人</small></button>` : ""}${
+      comments
+        .slice(0, 7)
+        .reverse()
+        .map(
+          (comment) =>
+            `<article class="${comment.authorRole === "host" ? "is-host" : ""}"><b>${escapeHTML(comment.name || "匿名观众")}${comment.authorRole === "host" ? "<em>房主</em>" : ""}</b><p>${escapeHTML(comment.body)}</p></article>`,
+        )
+        .join("") || (!poll ? "<p>互动内容会显示在这里</p>" : "")
+    }`;
+    list.querySelector(".room-feed-poll")?.addEventListener("click", () => {
+      if (viewerMode) openRoomInteraction("poll");
+      else {
+        roomTab = "polls";
+        openPanel("roomPanel");
+        renderRoom();
+      }
+    });
+  }
+  function openHostComment() {
+    if (!roomSession || !audienceSession) return;
+    const form = $("roomHostCommentForm");
+    form.reset();
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const button = event.submitter,
+        body = new FormData(form).get("body");
+      button.disabled = true;
+      try {
+        audienceSession = await sessionRequest(
+          `/audience-sessions/${audienceSession.token}/comments`,
+          { method: "POST", body: { body } },
+        );
+        renderLiveFeed({
+          poll: audienceSession.poll,
+          comments: audienceSession.questions,
+        });
+        dismissPanel();
+        toast("评论已发布");
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message);
+      }
+    };
+    openPanel("roomHostCommentPanel");
+    form.elements.body.focus({ preventScroll: true });
   }
   function connectRoom() {
     roomSocket?.close();
+    hostWindow.clearInterval(roomPingInterval);
     const protocol = hostWindow.location.protocol === "https:" ? "wss:" : "ws:",
       socketURL = `${protocol}//${hostWindow.location.host}/ws/rooms/${roomSession.token}?host=${encodeURIComponent(roomSession.hostToken)}`;
     roomSocket = new hostWindow.WebSocket(socketURL);
@@ -1027,6 +1153,9 @@ export function mountPresenter({
       roomSend({ type: "page", page: current });
       for (let page = 1; page <= total; page++)
         if (annotations[page]?.length) syncRoomInk(page);
+      const ping = () => roomSend({ type: "ping", at: Date.now() });
+      ping();
+      roomPingInterval = hostWindow.setInterval(ping, 3000);
     };
     roomSocket.onmessage = ({ data: raw }) => {
       try {
@@ -1034,10 +1163,14 @@ export function mountPresenter({
         if (message.type === "participants") {
           roomSession.connections = message.connections || [];
           updateRoomConnections(roomSession.connections);
+        } else if (message.type === "pong") {
+          roomLatency = Math.max(0, Date.now() - Number(message.at));
+          updateRoomPresence(roomSession.connections?.length || 0, roomLatency);
         }
       } catch {}
     };
     roomSocket.onclose = () => {
+      hostWindow.clearInterval(roomPingInterval);
       if (roomSession)
         hostWindow.setTimeout(() => {
           if (roomSession) connectRoom();
@@ -1074,7 +1207,7 @@ export function mountPresenter({
             .sort((a, b) => Number(a.answered) - Number(b.answered))
             .map(
               (comment) =>
-                `<button type="button" data-room-comment="${comment.id}" class="${comment.answered ? "answered" : ""}"><span><b>${escapeHTML(comment.name || "匿名观众")}</b>${escapeHTML(comment.body)}</span><em>${comment.answered ? `${ico("check")}已处理` : "标记已处理"}</em></button>`,
+                `<button type="button" data-room-comment="${comment.id}" class="${comment.answered ? "answered" : ""}"><span><b>${escapeHTML(comment.name || "匿名观众")}${comment.authorRole === "host" ? "<i>房主</i>" : ""}</b>${escapeHTML(comment.body)}</span><em>${comment.answered ? `${ico("check")}已处理` : "标记已处理"}</em></button>`,
             )
             .join("")
         : '<p class="session-empty">还没有收到评论</p>'
@@ -1092,7 +1225,7 @@ export function mountPresenter({
       ["showOnlineCount", "展示在线人数"],
     ];
     if (roomTab === "settings")
-      panel.innerHTML = `<div class="room-settings-grid"><div class="session-connect room-connect"><div class="session-qr"><button type="button" class="session-qr-frame" aria-label="放大房间二维码"><img src="${escapeHTML(roomSession.qr)}" alt="房间二维码"></button><span>${ico("audience")}扫码加入房间</span></div><div><label>房间地址</label><div class="session-link"><input value="${escapeHTML(roomSession.url)}" readonly><button type="button" data-copy-room>${ico("check")}复制链接</button></div><small><i></i>观众将自动跟随当前页面、光标与批注</small></div></div><section class="room-permissions"><div class="connection-heading"><div><h3>观众权限</h3><p>更改后立即同步到房间</p></div></div><div class="room-permission-grid">${permissionRows.map(([key, label]) => `<label><span>${escapeHTML(label)}</span><input type="checkbox" data-room-permission="${key}" ${roomSession.permissions[key] ? "checked" : ""}><i aria-hidden="true"></i></label>`).join("")}</div></section></div><div class="room-actions"><button type="button" data-room-end>结束房间</button></div>`;
+      panel.innerHTML = `<div class="room-settings-grid"><div class="session-connect room-connect"><div class="session-qr"><button type="button" class="session-qr-frame" aria-label="放大房间二维码"><img src="${escapeHTML(roomSession.qr)}" alt="房间二维码"></button><span>${ico("audience")}扫码加入房间</span></div><div><label>房间地址</label><div class="session-link"><input value="${escapeHTML(roomSession.url)}" readonly><button type="button" data-copy-room>${ico("check")}复制链接</button></div><small><i></i>观众将自动跟随当前页面、光标与批注</small></div></div><section class="room-permissions"><div class="connection-heading"><div><h3>观众权限</h3><p>更改后立即同步到房间</p></div></div><div class="room-permission-grid">${permissionRows.map(([key, label]) => `<label><span>${escapeHTML(label)}</span><input type="checkbox" data-room-permission="${key}" ${roomSession.permissions[key] ? "checked" : ""}><i aria-hidden="true"></i></label>`).join("")}</div></section><section class="room-password-control"><div><h3>房间密码</h3><p>${roomSession.passwordProtected ? "当前已设置密码，保存新密码会要求观众重新加入" : "不设置密码时，填写称呼即可加入"}</p></div><div><input type="password" data-room-password maxlength="128" placeholder="${roomSession.passwordProtected ? "输入新密码，留空可移除" : "可选：设置访问密码"}"><button type="button" data-room-password-save>保存密码</button></div></section></div><div class="room-actions"><button type="button" data-room-end>结束房间</button></div>`;
     else if (roomTab === "members")
       panel.innerHTML = `<section class="session-connections room-members"><div class="connection-heading"><div><h3>房间成员</h3><p>正在同步观看演示的设备</p></div><span id="roomDeviceCount">${roomSession.connections?.length || 0} 人</span></div><div id="roomDeviceList" class="connection-list">${connectionsMarkup(roomSession.connections)}</div></section>`;
     else if (roomTab === "polls") panel.innerHTML = roomPollMarkup();
@@ -1115,6 +1248,7 @@ export function mountPresenter({
               body: { permissions, page: current },
             });
             roomSession.permissions = state.permissions;
+            ensureRoomChrome();
             toast("房间权限已更新");
           } catch (error) {
             input.checked = !input.checked;
@@ -1122,6 +1256,30 @@ export function mountPresenter({
           }
         };
       });
+      panel.querySelector("[data-room-password-save]").onclick = async (
+        event,
+      ) => {
+        const input = panel.querySelector("[data-room-password]");
+        event.currentTarget.disabled = true;
+        try {
+          const state = await sessionRequest(`/rooms/${roomSession.token}`, {
+            method: "PATCH",
+            headers: { "X-Room-Host": roomSession.hostToken },
+            body: { password: input.value, page: current },
+          });
+          roomSession = { ...roomSession, ...state };
+          ensureRoomChrome();
+          renderRoomTab();
+          toast(
+            state.passwordProtected
+              ? "房间密码已更新，观众需要重新加入"
+              : "房间密码已移除",
+          );
+        } catch (error) {
+          event.currentTarget.disabled = false;
+          toast(error.message);
+        }
+      };
       panel.querySelector("[data-room-end]").onclick = endRoom;
     } else if (roomTab === "polls") bindRoomPoll(panel);
     else if (roomTab === "comments") bindRoomComments(panel);
@@ -1201,7 +1359,12 @@ export function mountPresenter({
     roomSession = null;
     audienceSession = null;
     hostWindow.clearInterval(audienceInterval);
+    hostWindow.clearInterval(roomPingInterval);
     audienceInterval = 0;
+    roomLatency = null;
+    $("roomOnline")?.remove();
+    $("roomLiveFeed")?.remove();
+    $("roomHostCommentBtn")?.remove();
     dismissPanel();
     toast("房间已结束");
   }
@@ -1225,35 +1388,53 @@ export function mountPresenter({
     renderRoomTab();
     startAudiencePolling();
   }
-  async function openRoom() {
-    openPanel("roomPanel");
-    if (roomSession) return renderRoom();
+  function renderRoomSetup() {
     const body = $("roomBody");
-    body.className = "session-loading";
-    body.textContent = "正在创建房间…";
-    try {
-      roomSession = await sessionRequest("/rooms", {
-        method: "POST",
-        body: {
-          deckId,
-          page: current,
-          permissions: {
-            directory: true,
-            notes: false,
-            interaction: true,
-            downloadPdf: false,
-            showInteractionFeed: true,
-            showOnlineCount: true,
+    body.className = "room-setup";
+    body.innerHTML = `<form id="roomSetupForm"><div class="room-setup-intro"><span>${ico("audience")}</span><div><h3>开启房间</h3><p>开启后，观众会同步看到页面、光标和批注。请确认访问权限后再开启。</p></div></div><div class="room-setup-fields"><label>房间密码（可选）<input name="password" type="password" maxlength="128" placeholder="不填写则无需密码"></label><fieldset><legend>默认开放给观众</legend><label><input type="checkbox" name="directory" checked>目录</label><label><input type="checkbox" name="notes">备注</label><label><input type="checkbox" name="interaction" checked>互动</label><label><input type="checkbox" name="downloadPdf">PDF 下载</label><label><input type="checkbox" name="showInteractionFeed" checked>互动浮层</label><label><input type="checkbox" name="showOnlineCount" checked>在线人数</label></fieldset></div><div class="room-setup-actions"><button type="button" data-close="roomPanel">取消</button><button type="submit" class="session-primary">确认开启房间</button></div></form>`;
+    body.querySelector("[data-close]").onclick = () => dismissPanel();
+    body.querySelector("form").onsubmit = async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget,
+        values = new FormData(form),
+        button = event.submitter;
+      button.disabled = true;
+      button.textContent = "正在开启…";
+      try {
+        roomSession = await sessionRequest("/rooms", {
+          method: "POST",
+          body: {
+            deckId,
+            page: current,
+            password: values.get("password"),
+            permissions: Object.fromEntries(
+              [
+                "directory",
+                "notes",
+                "interaction",
+                "downloadPdf",
+                "showInteractionFeed",
+                "showOnlineCount",
+              ].map((key) => [key, values.has(key)]),
+            ),
           },
-        },
-      });
-      audienceSession = roomSession.interaction;
-      connectRoom();
-      renderRoom();
-    } catch (error) {
-      body.className = "session-error";
-      body.textContent = error.message;
-    }
+        });
+        audienceSession = roomSession.interaction;
+        roomTab = "settings";
+        connectRoom();
+        ensureRoomChrome();
+        renderRoom();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = "确认开启房间";
+        toast(error.message);
+      }
+    };
+  }
+  function openRoom() {
+    openPanel("roomPanel");
+    if (roomSession) renderRoom();
+    else renderRoomSetup();
   }
   function captureAudienceDraft() {
     const form = $("audiencePollForm"),
@@ -1387,13 +1568,16 @@ export function mountPresenter({
     audienceInterval ||= hostWindow.setInterval(async () => {
       const audienceOpen = $("audiencePanel") && !$("audiencePanel").hidden,
         roomOpen = $("roomPanel") && !$("roomPanel").hidden;
-      if (!audienceSession || (!audienceOpen && !roomOpen)) return;
+      if (!audienceSession || (!audienceOpen && !roomOpen && !roomSession))
+        return;
       try {
         const next = await sessionRequest(
           `/audience-sessions/${audienceSession.token}`,
         );
         next.qr = audienceSession.qr;
         audienceSession = next;
+        if (roomSession)
+          renderLiveFeed({ poll: next.poll, comments: next.questions });
         if (audienceOpen) renderAudienceDashboard(captureAudienceDraft());
         if (
           roomOpen &&
@@ -1437,6 +1621,20 @@ export function mountPresenter({
       renderAudienceDashboard();
       startAudiencePolling();
     } else startAudience();
+  }
+  function openRoomInteraction(mode) {
+    const panelIds = {
+        poll: "roomPollPanel",
+        comments: "roomCommentPanel",
+        rating: "roomRatingPanel",
+      },
+      panel = $(panelIds[mode]),
+      frame = panel?.querySelector("iframe");
+    if (!panel || !frame) return;
+    const url = new URL(frame.dataset.baseUrl, hostWindow.location.origin);
+    url.searchParams.set("embed", mode);
+    if (frame.src !== url.href) frame.src = url.href;
+    openPanel(panelIds[mode]);
   }
   function act(action) {
     if (action.startsWith("tool:")) {
@@ -1514,8 +1712,12 @@ export function mountPresenter({
   if ($("remoteControlBtn"))
     $("remoteControlBtn").onclick = () => openRemoteControl();
   if ($("roomBtn")) $("roomBtn").onclick = () => openRoom();
-  if ($("roomInteractionBtn"))
-    $("roomInteractionBtn").onclick = () => openPanel("roomInteractionPanel");
+  if ($("roomPollBtn"))
+    $("roomPollBtn").onclick = () => openRoomInteraction("poll");
+  if ($("roomCommentsBtn"))
+    $("roomCommentsBtn").onclick = () => openRoomInteraction("comments");
+  if ($("roomRatingBtn"))
+    $("roomRatingBtn").onclick = () => openRoomInteraction("rating");
   if ($("roomDownloadBtn"))
     $("roomDownloadBtn").onclick = () =>
       (hostWindow.location.href = downloadURL);
@@ -1759,7 +1961,8 @@ export function mountPresenter({
       !e.isPrimary ||
       panelOpen() ||
       openMenu() ||
-      performance.now() < eatClickUntil
+      (performance.now() < eatClickUntil &&
+        !["pen", "highlighter", "eraser"].includes(tool))
     )
       return;
     cursorPoint = { clientX: e.clientX, clientY: e.clientY };
@@ -2008,7 +2211,10 @@ export function mountPresenter({
         "remoteControlPanel",
         "audiencePanel",
         "roomPanel",
-        "roomInteractionPanel",
+        "roomPollPanel",
+        "roomCommentPanel",
+        "roomRatingPanel",
+        "roomHostCommentPanel",
       ]
         .map($)
         .find((el) => el && !el.hidden && !el.classList.contains("closing"));
@@ -2198,6 +2404,7 @@ export function mountPresenter({
     presenterChannel?.close();
     hostWindow.clearInterval(remoteInterval);
     hostWindow.clearInterval(audienceInterval);
+    hostWindow.clearInterval(roomPingInterval);
     roomSocket?.close();
     if (roomSession)
       sessionRequest(`/rooms/${roomSession.token}`, {
@@ -2264,28 +2471,11 @@ export function mountPresenter({
       dot.style.top = rect.top + pointer.y * rect.height + "px";
       dot.classList.add("visible");
     },
-    updateRoomParticipants(count) {
-      const online = $("roomOnline");
-      if (online)
-        online.querySelector("b").textContent = Math.max(1, count || 0);
+    updateRoomParticipants(count, latency = null) {
+      updateRoomPresence(count, latency);
     },
     applyRoomFeed(feed) {
-      const list = $("roomFeedItems");
-      if (!list || !feed) return;
-      const poll = feed.poll,
-        comments = feed.comments || [];
-      list.innerHTML = `${poll ? `<button type="button" class="room-feed-poll"><span>${ico("audience")}投票</span><b>${escapeHTML(poll.question)}</b><small>${poll.status === "open" ? "点击参与" : "查看结果"} · ${poll.votes || 0} 人</small></button>` : ""}${
-        comments
-          .slice(0, 6)
-          .map(
-            (comment) =>
-              `<article><b>${escapeHTML(comment.name || "匿名观众")}</b><p>${escapeHTML(comment.body)}</p></article>`,
-          )
-          .join("") || (!poll ? "<p>互动内容会显示在这里</p>" : "")
-      }`;
-      list
-        .querySelector(".room-feed-poll")
-        ?.addEventListener("click", () => openPanel("roomInteractionPanel"));
+      renderLiveFeed(feed);
     },
     get strokeCount() {
       return inks().length;

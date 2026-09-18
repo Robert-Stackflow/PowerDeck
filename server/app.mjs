@@ -103,6 +103,17 @@ export async function createApp({
   });
   const platform = createPlatform(store, dataDir, origin || publicURL || "");
   const rooms = createRooms(store, origin || publicURL || "");
+  const roomCookieName = (roomToken) => `pd_room_${roomToken}`;
+  const cookieValue = (req, name) => {
+    const prefix = `${name}=`;
+    return String(req.headers.cookie || "")
+      .split(";")
+      .map((value) => value.trim())
+      .find((value) => value.startsWith(prefix))
+      ?.slice(prefix.length);
+  };
+  const roomAdmission = (req, roomToken) =>
+    cookieValue(req, roomCookieName(roomToken));
   const sendFile = (res, file, type) => {
     const data = fs.readFileSync(file);
     res.writeHead(200, { "Content-Type": type, "Content-Length": data.length });
@@ -239,8 +250,29 @@ export async function createApp({
           await loginRoutes[pathname](await readJSON(req, 131072)),
         );
       if (parts[0] === "api" && parts[1] === "rooms" && parts[2]) {
-        const room = rooms.get(parts[2]);
+        const roomToken = parts[2];
+        if (parts[3] === "join-info" && method === "GET")
+          return json(
+            res,
+            200,
+            rooms.joinInfo(roomToken, roomAdmission(req, roomToken)),
+          );
+        if (parts[3] === "join" && method === "POST") {
+          const joined = rooms.join(
+            roomToken,
+            await readJSON(req, 8192),
+            clientConnection(req),
+          );
+          res.setHeader(
+            "Set-Cookie",
+            `${roomCookieName(roomToken)}=${joined.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${8 * 60 * 60}${origin?.startsWith("https:") ? "; Secure" : ""}`,
+          );
+          return json(res, 200, { ok: true, name: joined.name });
+        }
+        const room = rooms.get(roomToken);
         if (!room) throw new HttpError(404, "房间不存在或已结束");
+        if (method === "GET")
+          rooms.requireAdmission(roomToken, roomAdmission(req, roomToken));
         if (parts.length === 3 && method === "GET") {
           const deck = store.get(room.deckId),
             content = store.content(room.deckId);
@@ -558,6 +590,7 @@ export async function createApp({
               page: input.page,
               permissions: input.permissions,
               interactionToken: audience.token,
+              password: input.password,
             });
           room.qr = await QRCode.toDataURL(room.url, {
             width: 360,
@@ -599,6 +632,14 @@ export async function createApp({
               201,
               platform.createPoll(audienceToken, await readJSON(req, 16384)),
             );
+          if (parts[3] === "comments" && method === "POST") {
+            platform.askQuestion(
+              audienceToken,
+              await readJSON(req, 8192),
+              "host",
+            );
+            return json(res, 201, platform.audienceState(audienceToken, true));
+          }
           if (parts[3] === "polls" && parts[4] === "close" && method === "POST")
             return json(res, 200, platform.closePoll(audienceToken));
           if (parts[3] === "questions" && parts[4] && method === "PATCH")
@@ -1053,6 +1094,7 @@ export async function createApp({
           ws,
           match[1],
           requestURL.searchParams.get("host"),
+          roomAdmission(req, match[1]),
           clientConnection(req),
         ),
       );

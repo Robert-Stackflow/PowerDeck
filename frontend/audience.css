@@ -216,6 +216,28 @@ form button {
   text-align: center;
   font-size: 12px;
 }
+.audience-embed {
+  min-height: 100%;
+  background: #f6f8f7;
+}
+.audience-embed [hidden] {
+  display: none !important;
+}
+.audience-embed #audienceApp {
+  width: 100%;
+  max-width: none;
+  padding: 4px;
+}
+.audience-embed .audience-card {
+  margin: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.audience-embed .audience-message {
+  position: sticky;
+  bottom: 0;
+}
 .loading,
 .error {
   margin: 30vh auto;

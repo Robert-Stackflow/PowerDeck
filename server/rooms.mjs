@@ -11,6 +11,10 @@ const DEFAULT_PERMISSIONS = Object.freeze({
 });
 
 const token = () => crypto.randomBytes(24).toString("base64url");
+const passwordDigest = (password, salt = crypto.randomBytes(16)) => ({
+  salt: salt.toString("base64url"),
+  hash: crypto.scryptSync(String(password), salt, 32).toString("base64url"),
+});
 const clampPage = (value, total) =>
   Math.max(1, Math.min(total, Math.trunc(Number(value) || 1)));
 const cleanPermissions = (value = {}) =>
@@ -54,6 +58,7 @@ export function createRooms(store, publicURL = "") {
         : null,
       participants: connectionList(room).length,
       updatedAt: room.touchedAt,
+      passwordProtected: !!room.password,
     };
   }
 
@@ -89,7 +94,7 @@ export function createRooms(store, publicURL = "") {
     );
   }
 
-  function create({ deckId, page, permissions, interactionToken }) {
+  function create({ deckId, page, permissions, interactionToken, password }) {
     const deck = store.get(deckId),
       roomToken = token(),
       hostToken = token(),
@@ -102,6 +107,10 @@ export function createRooms(store, publicURL = "") {
         page: clampPage(page, deck.slideCount),
         permissions: cleanPermissions(permissions),
         interactionToken,
+        password: String(password || "").trim()
+          ? passwordDigest(String(password).trim())
+          : null,
+        admissions: new Map(),
         pointer: null,
         ink: {},
         clients: new Set(),
@@ -111,6 +120,86 @@ export function createRooms(store, publicURL = "") {
     room.url = `${publicURL}/room/${roomToken}`;
     rooms.set(roomToken, room);
     return adminState(room);
+  }
+
+  function admission(room, admissionToken) {
+    const value = admissionToken && room.admissions.get(admissionToken);
+    if (!value || Date.now() - value.joinedAt > MAX_AGE) return null;
+    return value;
+  }
+
+  function joinInfo(roomToken, admissionToken) {
+    const room = get(roomToken);
+    if (!room) {
+      const error = new Error("房间不存在或已结束");
+      error.status = 404;
+      throw error;
+    }
+    const current = admission(room, admissionToken);
+    return {
+      title: room.title,
+      passwordProtected: !!room.password,
+      joined: !!current,
+      name: current?.name || "",
+    };
+  }
+
+  function join(roomToken, { name, password }, connection) {
+    const room = get(roomToken);
+    if (!room) {
+      const error = new Error("房间不存在或已结束");
+      error.status = 404;
+      throw error;
+    }
+    const cleanName = String(name || "")
+      .trim()
+      .slice(0, 40);
+    if (!cleanName) {
+      const error = new Error("请填写称呼");
+      error.status = 400;
+      throw error;
+    }
+    if (room.password) {
+      const supplied = crypto.scryptSync(
+        String(password || ""),
+        Buffer.from(room.password.salt, "base64url"),
+        32,
+      );
+      if (
+        !crypto.timingSafeEqual(
+          supplied,
+          Buffer.from(room.password.hash, "base64url"),
+        )
+      ) {
+        const error = new Error("房间密码不正确");
+        error.status = 403;
+        throw error;
+      }
+    }
+    const admissionToken = token();
+    room.admissions.set(admissionToken, {
+      name: cleanName,
+      deviceId: connection.deviceId,
+      joinedAt: Date.now(),
+    });
+    room.touchedAt = Date.now();
+    return { token: admissionToken, name: cleanName };
+  }
+
+  function requireAdmission(roomToken, admissionToken) {
+    const room = get(roomToken);
+    if (!room) {
+      const error = new Error("房间不存在或已结束");
+      error.status = 404;
+      throw error;
+    }
+    const value = admission(room, admissionToken);
+    if (!value) {
+      const error = new Error("请先加入房间");
+      error.status = 401;
+      throw error;
+    }
+    return { room, admission: value };
   }
 
   function requireHost(roomToken, hostToken) {
@@ -137,6 +226,13 @@ export function createRooms(store, publicURL = "") {
         ...room.permissions,
         ...input.permissions,
       });
+    if (Object.hasOwn(input, "password")) {
+      const password = String(input.password || "").trim();
+      room.password = password ? passwordDigest(password) : null;
+      room.admissions.clear();
+      for (const client of [...room.clients])
+        if (client.role === "viewer") client.ws.close(1008, "access changed");
+    }
     room.touchedAt = Date.now();
     broadcast(room, { type: "state", state: publicState(room) });
     return adminState(room);
@@ -150,22 +246,28 @@ export function createRooms(store, publicURL = "") {
     return room;
   }
 
-  function attach(ws, roomToken, hostToken, connection) {
+  function attach(ws, roomToken, hostToken, admissionToken, connection) {
     const room = get(roomToken);
     if (!room) {
       ws.close(1008, "room unavailable");
       return;
     }
     const role = hostToken === room.hostToken ? "host" : "viewer",
-      client = {
-        ws,
-        role,
-        connection: {
-          ...connection,
-          connectedAt: Date.now(),
-          lastSeen: Date.now(),
-        },
-      };
+      admitted = role === "viewer" ? admission(room, admissionToken) : null;
+    if (role === "viewer" && !admitted) {
+      ws.close(1008, "join required");
+      return;
+    }
+    const client = {
+      ws,
+      role,
+      connection: {
+        ...connection,
+        ...(admitted ? { name: admitted.name } : {}),
+        connectedAt: Date.now(),
+        lastSeen: Date.now(),
+      },
+    };
     room.clients.add(client);
     room.touchedAt = Date.now();
     send(client, {
@@ -176,13 +278,18 @@ export function createRooms(store, publicURL = "") {
     participantsChanged(room);
 
     ws.on("message", (raw) => {
-      if (client.role !== "host" || raw.length > 2 * 1024 * 1024) return;
+      if (raw.length > 2 * 1024 * 1024) return;
       let message;
       try {
         message = JSON.parse(raw.toString());
       } catch {
         return;
       }
+      if (message.type === "ping") {
+        send(client, { type: "pong", at: Number(message.at) || Date.now() });
+        return;
+      }
+      if (client.role !== "host") return;
       room.touchedAt = Date.now();
       client.connection.lastSeen = room.touchedAt;
       if (message.type === "page") {
@@ -210,8 +317,6 @@ export function createRooms(store, publicURL = "") {
             "viewer",
           );
         }
-      } else if (message.type === "ping") {
-        send(client, { type: "pong", at: Date.now() });
       }
     });
     ws.on("close", () => {
@@ -235,6 +340,9 @@ export function createRooms(store, publicURL = "") {
   return {
     create,
     get,
+    joinInfo,
+    join,
+    requireAdmission,
     publicState,
     adminState,
     update,

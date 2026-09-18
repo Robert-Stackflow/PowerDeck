@@ -6,11 +6,19 @@ import { loadSite, site, setFavicon } from "../branding.js";
 const token = location.pathname.split("/").filter(Boolean)[1] || "",
   frame = document.querySelector("#playerFrame"),
   loading = document.querySelector("#loading"),
-  status = document.querySelector("#roomStatus");
+  status = document.querySelector("#roomStatus"),
+  joinScreen = document.querySelector("#roomJoin"),
+  joinForm = document.querySelector("#roomJoinForm"),
+  deviceKey = "powerdeck-room-device",
+  deviceId = localStorage.getItem(deviceKey) || crypto.randomUUID();
+localStorage.setItem(deviceKey, deviceId);
 let room,
   socket,
   reconnectTimer,
   feedTimer,
+  pingTimer,
+  participantCount = 1,
+  latency = null,
   reconnectDelay = 700,
   stopped = false;
 
@@ -27,6 +35,54 @@ async function read(url) {
 function setStatus(text, state = "") {
   status.className = state;
   status.querySelector("span").textContent = text;
+}
+
+async function ensureJoined(prefix) {
+  const info = await read(`${prefix}/join-info`);
+  if (info.joined) return;
+  loading.hidden = true;
+  status.hidden = true;
+  joinScreen.hidden = false;
+  document.querySelector("#roomJoinTitle").textContent = info.title;
+  const passwordField = document.querySelector("#roomPasswordField"),
+    passwordInput = joinForm.elements.password,
+    savedName = localStorage.getItem("powerdeck-room-name") || "";
+  passwordField.hidden = !info.passwordProtected;
+  passwordInput.required = info.passwordProtected;
+  joinForm.elements.name.value = savedName;
+  await new Promise((resolve) => {
+    joinForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const button = event.submitter,
+        error = document.querySelector("#roomJoinError"),
+        values = new FormData(joinForm);
+      button.disabled = true;
+      error.textContent = "";
+      try {
+        const response = await fetch(`${prefix}/join`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-PowerDeck-Device": deviceId,
+          },
+          body: JSON.stringify({
+            name: values.get("name"),
+            password: values.get("password"),
+          }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "无法加入房间");
+        localStorage.setItem("powerdeck-room-name", result.name);
+        joinScreen.hidden = true;
+        loading.hidden = false;
+        status.hidden = false;
+        resolve();
+      } catch (joinError) {
+        error.textContent = joinError.message;
+        button.disabled = false;
+      }
+    };
+  });
 }
 
 function fail(error) {
@@ -60,8 +116,14 @@ function applyMessage(message) {
   else if (message.type === "ink")
     presentation.applyRoomInk(message.page, message.strokes);
   else if (message.type === "participants")
-    presentation.updateRoomParticipants(message.count);
-  else if (message.type === "ended") fail(new Error("房主已结束房间"));
+    presentation.updateRoomParticipants(
+      (participantCount = message.count),
+      latency,
+    );
+  else if (message.type === "pong") {
+    latency = Math.max(0, Date.now() - Number(message.at));
+    presentation.updateRoomParticipants(participantCount, latency);
+  } else if (message.type === "ended") fail(new Error("房主已结束房间"));
 }
 
 function connect() {
@@ -75,6 +137,12 @@ function connect() {
   socket.onopen = () => {
     reconnectDelay = 700;
     setStatus("已同步房主画面", "connected");
+    const ping = () =>
+      socket?.readyState === WebSocket.OPEN &&
+      socket.send(JSON.stringify({ type: "ping", at: Date.now() }));
+    ping();
+    clearInterval(pingTimer);
+    pingTimer = setInterval(ping, 3000);
   };
   socket.onmessage = ({ data }) => {
     try {
@@ -82,7 +150,12 @@ function connect() {
     } catch {}
   };
   socket.onclose = (event) => {
+    clearInterval(pingTimer);
     if (stopped || event.code === 1000) return;
+    if (event.code === 1008) {
+      location.reload();
+      return;
+    }
     setStatus("连接中断，正在重连", "reconnecting");
     reconnectTimer = setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(6000, reconnectDelay * 1.7);
@@ -92,6 +165,7 @@ function connect() {
 try {
   await loadSite();
   const prefix = `/api/rooms/${encodeURIComponent(token)}`;
+  await ensureJoined(prefix);
   const [roomData, baseCSS, playerCSS] = await Promise.all([
     read(prefix),
     fetch("/static/player/base.css").then((response) => response.text()),
@@ -158,4 +232,5 @@ addEventListener("beforeunload", () => {
   stopped = true;
   socket?.close();
   clearInterval(feedTimer);
+  clearInterval(pingTimer);
 });

@@ -27,7 +27,7 @@ export function createPlatform(store, dataDir, publicURL) {
     );
     CREATE TABLE IF NOT EXISTS audience_questions(
       id TEXT PRIMARY KEY,session_token TEXT NOT NULL REFERENCES audience_sessions(token) ON DELETE CASCADE,
-      name TEXT NOT NULL DEFAULT '',body TEXT NOT NULL,answered INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL
+      name TEXT NOT NULL DEFAULT '',body TEXT NOT NULL,author_role TEXT NOT NULL DEFAULT 'audience',answered INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS audience_polls(
       id TEXT PRIMARY KEY,session_token TEXT NOT NULL REFERENCES audience_sessions(token) ON DELETE CASCADE,
@@ -49,6 +49,15 @@ export function createPlatform(store, dataDir, publicURL) {
       first_seen INTEGER NOT NULL,last_seen INTEGER NOT NULL,
       PRIMARY KEY(session_token,device_id)
     );`);
+  if (
+    !db
+      .prepare("PRAGMA table_info(audience_questions)")
+      .all()
+      .some((column) => column.name === "author_role")
+  )
+    db.exec(
+      "ALTER TABLE audience_questions ADD COLUMN author_role TEXT NOT NULL DEFAULT 'audience'",
+    );
 
   const brandKit = () => {
     const row = db
@@ -179,7 +188,7 @@ export function createPlatform(store, dataDir, publicURL) {
       questions = admin
         ? db
             .prepare(
-              "SELECT id,name,body,answered,created_at AS createdAt FROM audience_questions WHERE session_token=? ORDER BY answered,created_at DESC",
+              "SELECT id,name,body,author_role AS authorRole,answered,created_at AS createdAt FROM audience_questions WHERE session_token=? ORDER BY answered,created_at DESC",
             )
             .all(token)
             .map((item) => ({ ...item, answered: !!item.answered }))
@@ -217,7 +226,7 @@ export function createPlatform(store, dataDir, publicURL) {
     const state = audienceState(token),
       comments = db
         .prepare(
-          "SELECT id,name,body,created_at AS createdAt FROM audience_questions WHERE session_token=? ORDER BY created_at DESC LIMIT 30",
+          "SELECT id,name,body,author_role AS authorRole,created_at AS createdAt FROM audience_questions WHERE session_token=? ORDER BY created_at DESC LIMIT 30",
         )
         .all(token);
     return { poll: state.poll, comments, updatedAt: Date.now() };
@@ -246,7 +255,7 @@ export function createPlatform(store, dataDir, publicURL) {
       .createHash("sha256")
       .update(String(value || "anonymous"))
       .digest("hex");
-  const askQuestion = (token, input) => {
+  const askQuestion = (token, input, authorRole = "audience") => {
     audienceSession(token);
     const body = String(input.body || "").trim(),
       name = String(input.name || "匿名观众")
@@ -257,8 +266,15 @@ export function createPlatform(store, dataDir, publicURL) {
       "评论需为 1–500 个字符",
     );
     db.prepare(
-      "INSERT INTO audience_questions(id,session_token,name,body,created_at) VALUES(?,?,?,?,?)",
-    ).run(crypto.randomUUID(), token, name || "匿名观众", body, Date.now());
+      "INSERT INTO audience_questions(id,session_token,name,body,author_role,created_at) VALUES(?,?,?,?,?,?)",
+    ).run(
+      crypto.randomUUID(),
+      token,
+      authorRole === "host" ? "房主" : name || "匿名观众",
+      body,
+      authorRole === "host" ? "host" : "audience",
+      Date.now(),
+    );
     return { ok: true };
   };
   const createPoll = (token, input) => {
