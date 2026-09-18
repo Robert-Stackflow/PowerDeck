@@ -1,4 +1,8 @@
 :root {
+  --presenter-safe-top: env(safe-area-inset-top, 0px);
+  --presenter-safe-right: env(safe-area-inset-right, 0px);
+  --presenter-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --presenter-safe-left: env(safe-area-inset-left, 0px);
   color-scheme: dark;
   font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
   background: #0d1210;
@@ -40,12 +44,13 @@ button {
   color: #9cad9f;
 }
 .presenter-topbar {
-  height: 66px;
+  height: calc(66px + var(--presenter-safe-top));
   flex: none;
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 0 24px;
+  padding: var(--presenter-safe-top) max(24px, var(--presenter-safe-right)) 0
+    max(24px, var(--presenter-safe-left));
   border-bottom: 1px solid #ffffff14;
   background: #121916;
 }
@@ -96,7 +101,8 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(300px, 0.75fr);
   gap: 18px;
-  padding: 18px;
+  padding: 18px max(18px, var(--presenter-safe-right)) 18px
+    max(18px, var(--presenter-safe-left));
   overflow: hidden;
   overscroll-behavior: contain;
 }
@@ -254,7 +260,7 @@ button {
   background: transparent;
 }
 .presenter-controls {
-  height: calc(72px + env(safe-area-inset-bottom));
+  height: calc(72px + var(--presenter-safe-bottom));
   flex: none;
   display: flex;
   align-items: center;
@@ -262,7 +268,9 @@ button {
   gap: 10px;
   border-top: 1px solid #ffffff14;
   background: #121916;
-  padding: 10px 20px calc(10px + env(safe-area-inset-bottom));
+  padding: 10px max(20px, var(--presenter-safe-right))
+    calc(10px + var(--presenter-safe-bottom))
+    max(20px, var(--presenter-safe-left));
   position: relative;
   z-index: 10;
 }
@@ -333,9 +341,10 @@ button {
     overflow: hidden;
   }
   .presenter-topbar {
-    height: 58px;
+    height: calc(58px + var(--presenter-safe-top));
     gap: 10px;
-    padding: 0 12px;
+    padding: var(--presenter-safe-top) max(12px, var(--presenter-safe-right)) 0
+      max(12px, var(--presenter-safe-left));
   }
   .presenter-title {
     flex: 1;
@@ -358,7 +367,8 @@ button {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 10px;
+    padding: 10px max(10px, var(--presenter-safe-right)) 10px
+      max(10px, var(--presenter-safe-left));
     overflow: auto;
     overscroll-behavior: contain;
   }
@@ -387,10 +397,12 @@ button {
     font-size: 14px;
   }
   .presenter-controls {
-    height: calc(62px + env(safe-area-inset-bottom));
+    height: calc(62px + var(--presenter-safe-bottom));
     justify-content: flex-start;
     gap: 7px;
-    padding: 9px 10px calc(9px + env(safe-area-inset-bottom));
+    padding: 9px max(10px, var(--presenter-safe-right))
+      calc(9px + var(--presenter-safe-bottom))
+      max(10px, var(--presenter-safe-left));
     overflow-x: auto;
     scrollbar-width: none;
   }

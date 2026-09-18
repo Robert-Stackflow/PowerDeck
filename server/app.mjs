@@ -345,6 +345,8 @@ export async function createApp({
             return json(res, 201, d);
           }
         }
+        if (parts.length === 3 && parts[2] === "trash" && method === "DELETE")
+          return json(res, 200, store.emptyTrash());
         const id = parts[2];
         requireValue(
           /^[a-zA-Z0-9_-]{1,80}$/.test(id || ""),
@@ -352,6 +354,8 @@ export async function createApp({
         );
         if (parts[3] === "restore" && method === "POST")
           return json(res, 200, store.restore(id));
+        if (parts[3] === "permanent" && method === "DELETE")
+          return json(res, 200, store.permanentlyDelete(id));
         const d = store.get(id);
         if (parts[3] === "clone" && method === "POST")
           return json(res, 201, store.clone(id, await readJSON(req)));

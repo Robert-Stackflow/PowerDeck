@@ -30,6 +30,11 @@ let decks = [],
     ? sessionStorage.getItem("librarySection")
     : "all",
   access = "all",
+  trashKind = ["all", "deck", "template"].includes(
+    sessionStorage.getItem("trashKind"),
+  )
+    ? sessionStorage.getItem("trashKind")
+    : "all",
   query = "",
   sort = "updated";
 export const toast = createToast(document.querySelector("#toast"));
@@ -44,11 +49,17 @@ export function closeDialog() {
 export function showDialog(
   title,
   body,
-  { submit = "保存", onSubmit, wide = false, className = "" } = {},
+  {
+    submit = "保存",
+    onSubmit,
+    wide = false,
+    className = "",
+    danger = false,
+  } = {},
 ) {
   dialogBackdropPress = false;
   modal.className = [wide ? "wide" : "", className].filter(Boolean).join(" ");
-  modal.innerHTML = `<form id="dialogForm"><div class="dialog-head"><h2 id="dialogTitle">${esc(title)}</h2><button type="button" class="icon-button close-dialog" aria-label="关闭">${icon("x")}</button></div><div class="dialog-body">${body}</div><p class="form-error" id="dialogError" role="alert"></p>${onSubmit ? `<div class="dialog-footer"><button type="button" class="button subtle close-dialog">取消</button><button type="submit" class="button primary">${esc(submit)}</button></div>` : ""}</form>`;
+  modal.innerHTML = `<form id="dialogForm"><div class="dialog-head"><h2 id="dialogTitle">${esc(title)}</h2><button type="button" class="icon-button close-dialog" aria-label="关闭">${icon("x")}</button></div><div class="dialog-body">${body}</div><p class="form-error" id="dialogError" role="alert"></p>${onSubmit ? `<div class="dialog-footer"><button type="button" class="button subtle close-dialog">取消</button><button type="submit" class="button ${danger ? "danger-button" : "primary"}">${esc(submit)}</button></div>` : ""}</form>`;
   enhanceSelects(modal);
   if (!modal.open) modal.showModal();
   modal
@@ -206,6 +217,11 @@ function shell() {
   sessionStorage.setItem("librarySection", filter);
   document.title = site.name;
   const n = counts();
+  const trashCounts = {
+    all: n.trash,
+    deck: decks.filter((d) => d.deletedAt && d.kind !== "template").length,
+    template: decks.filter((d) => d.deletedAt && d.kind === "template").length,
+  };
   const markup = `<aside class="sidebar"><a class="brand" href="/">${brand()}</a><nav aria-label="演示稿分类">${[
     ["all", "library", "文稿"],
     ["templates", "overview", "模板"],
@@ -217,7 +233,20 @@ function shell() {
     )
     .join(
       "",
-    )}</nav><div class="account"><button id="accountSettings" class="account-name" aria-label="账号设置"><span class="avatar">${esc(session.username[0].toUpperCase())}</span><span>${esc(session.username)}<small>管理员</small></span></button><button id="logout" class="icon-button" aria-label="退出登录" title="退出登录">${icon("logOut")}</button></div></aside><main class="library"><header class="library-header"><div><p class="eyebrow">我的空间</p><h1>${{ all: "文稿", templates: "模板", trash: "回收站" }[filter]}</h1></div><div class="header-actions"><button class="button" id="importBtn">${icon("upload")}导入</button><button class="button primary" id="newBtn">${icon("plus")}${filter === "templates" ? "新建模板" : "新建文稿"}</button></div></header><div class="library-toolbar"><label class="search">${icon("search")}<input id="search" type="search" aria-label="搜索演示稿" placeholder="${filter === "templates" ? "搜索模板" : "搜索文稿"}" value="${esc(query)}"></label>${
+    )}</nav><div class="account"><button id="accountSettings" class="account-name" aria-label="账号设置"><span class="avatar">${esc(session.username[0].toUpperCase())}</span><span>${esc(session.username)}<small>管理员</small></span></button><button id="logout" class="icon-button" aria-label="退出登录" title="退出登录">${icon("logOut")}</button></div></aside><main class="library"><header class="library-header"><div><p class="eyebrow">我的空间</p><h1>${{ all: "文稿", templates: "模板", trash: "回收站" }[filter]}</h1></div><div class="header-actions">${filter === "trash" ? `<button class="button danger" id="emptyTrashBtn" ${n.trash ? "" : "disabled"}>${icon("trash2")}清空回收站</button>` : `<button class="button" id="importBtn">${icon("upload")}导入</button><button class="button primary" id="newBtn">${icon("plus")}${filter === "templates" ? "新建模板" : "新建文稿"}</button>`}</div></header>${
+    filter === "trash"
+      ? `<div class="trash-kind-tabs" role="tablist" aria-label="回收站内容类型">${[
+          ["all", "全部"],
+          ["deck", "文稿"],
+          ["template", "模板"],
+        ]
+          .map(
+            ([id, label]) =>
+              `<button type="button" role="tab" aria-selected="${trashKind === id}" data-trash-kind="${id}"><span>${label}</span><small>${trashCounts[id]}</small></button>`,
+          )
+          .join("")}</div>`
+      : ""
+  }<div class="library-toolbar"><label class="search">${icon("search")}<input id="search" type="search" aria-label="搜索演示稿" placeholder="${filter === "trash" ? "搜索回收站" : filter === "templates" ? "搜索模板" : "搜索文稿"}" value="${esc(query)}"></label>${
     filter === "all"
       ? selectMarkup({
           id: "visibilityFilter",
@@ -263,6 +292,22 @@ function shell() {
         shell();
       }),
   );
+  app.querySelectorAll("[data-trash-kind]").forEach(
+    (button) =>
+      (button.onclick = () => {
+        trashKind = button.dataset.trashKind;
+        sessionStorage.setItem("trashKind", trashKind);
+        app
+          .querySelectorAll("[data-trash-kind]")
+          .forEach((item) =>
+            item.setAttribute(
+              "aria-selected",
+              String(item.dataset.trashKind === trashKind),
+            ),
+          );
+        renderCards();
+      }),
+  );
   document.querySelector("#search").oninput = (e) => {
     query = e.target.value;
     renderCards();
@@ -277,10 +322,16 @@ function shell() {
       access = e.target.value;
       renderCards();
     });
-  document.querySelector("#newBtn").onclick = () =>
-    filter === "templates" ? createTemplateDialog() : createDialog();
-  document.querySelector("#importBtn").onclick = () =>
-    document.querySelector("#importFile").click();
+  const newButton = document.querySelector("#newBtn");
+  if (newButton)
+    newButton.onclick = () =>
+      filter === "templates" ? createTemplateDialog() : createDialog();
+  const importButton = document.querySelector("#importBtn");
+  if (importButton)
+    importButton.onclick = () => document.querySelector("#importFile").click();
+  document
+    .querySelector("#emptyTrashBtn")
+    ?.addEventListener("click", () => emptyTrashDialog(n.trash));
   document.querySelector("#logout").onclick = async () => {
     await api("/logout", { method: "POST" });
     setSession({});
@@ -298,10 +349,10 @@ function cardMarkup(d) {
     edit = `/edit/${d.slug}`;
   const open = edit;
   const menu = d.deletedAt
-    ? `<button data-action="restore" data-id="${d.id}">${icon("rotateCcw")}恢复</button>`
+    ? `<button data-action="restore" data-id="${d.id}">${icon("rotateCcw")}恢复</button><button class="danger" data-action="permanent" data-id="${d.id}">${icon("trash2")}永久删除</button>`
     : `<button data-action="settings" data-id="${d.id}">${icon("settings2")}${type}设置</button><button data-action="history" data-id="${d.id}">${icon("clock3")}版本历史</button><button data-action="${template ? "duplicate-template" : "save-template"}" data-id="${d.id}">${icon("copy")}${template ? "复制模板" : "另存为模板"}</button><button data-action="export" data-id="${d.id}">${icon("download")}导出</button><button class="danger" data-action="trash" data-id="${d.id}">${icon("trash2")}移至回收站</button>`;
   const actions = d.deletedAt
-    ? `<button class="button subtle" data-action="restore" data-id="${d.id}">${icon("rotateCcw")}恢复${type}</button>`
+    ? `<button class="button subtle" data-action="restore" data-id="${d.id}">${icon("rotateCcw")}恢复${type}</button><button class="icon-button danger" data-action="permanent" data-id="${d.id}" aria-label="永久删除${type} ${esc(d.title)}" title="永久删除">${icon("trash2")}</button>`
     : template
       ? `<button class="present-link" data-action="use-template" data-id="${d.id}">${icon("plus")}使用模板</button><div><a href="${edit}" class="icon-button" aria-label="编辑模板 ${esc(d.title)}" title="编辑模板">${icon("pencil")}</a><a href="${present}" target="_blank" rel="noopener" class="icon-button" aria-label="预览模板 ${esc(d.title)}" title="预览">${icon("presentation")}</a></div>`
       : `<a href="${present}" class="present-link" target="_blank" rel="noopener noreferrer" aria-label="演示 ${esc(d.title)}（新标签页）">${icon("presentation")}演示</a><div><a href="${edit}" class="icon-button" aria-label="编辑 ${esc(d.title)}" title="编辑">${icon("pencil")}</a><button class="icon-button" data-action="share" data-id="${d.id}" aria-label="分享 ${esc(d.title)}" title="权限与分享">${icon("link")}</button></div>`;
@@ -311,7 +362,11 @@ function renderCards() {
   const list = decks.filter(
     (d) =>
       (filter === "trash"
-        ? !!d.deletedAt
+        ? !!d.deletedAt &&
+          (trashKind === "all" ||
+            (trashKind === "template"
+              ? d.kind === "template"
+              : d.kind !== "template"))
         : !d.deletedAt &&
           (filter === "templates"
             ? d.kind === "template"
@@ -325,7 +380,7 @@ function renderCards() {
     list.sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
   document.querySelector("#deckGrid").innerHTML = list.length
     ? list.map(cardMarkup).join("")
-    : `<div class="empty-state">${icon(query ? "search" : "folderOpen")}<h2>${query ? "没有找到匹配的内容" : filter === "trash" ? "回收站是空的" : filter === "templates" ? "这里还没有模板" : "这里还没有文稿"}</h2></div>`;
+    : `<div class="empty-state">${icon(query ? "search" : "folderOpen")}<h2>${query ? "没有找到匹配的内容" : filter === "trash" ? (trashKind === "deck" ? "回收站中没有文稿" : trashKind === "template" ? "回收站中没有模板" : "回收站是空的") : filter === "templates" ? "这里还没有模板" : "这里还没有文稿"}</h2></div>`;
   document.querySelector("#deckGrid").onclick = async (e) => {
     const b = e.target.closest("[data-action]");
     if (!b) return;
@@ -345,10 +400,13 @@ function renderCards() {
         toast("已移至回收站");
       }
       if (action === "restore") {
+        const restored = decks.find((deck) => deck.id === id);
         await api("/decks/" + id + "/restore", { method: "POST" });
         await refresh();
-        toast("已恢复");
+        toast(`已恢复${restored?.kind === "template" ? "模板" : "文稿"}`);
       }
+      if (action === "permanent")
+        permanentDeleteDialog(decks.find((deck) => deck.id === id));
       if (action === "export")
         exportDialog(decks.find((deck) => deck.id === id));
     } catch (error) {
@@ -357,6 +415,50 @@ function renderCards() {
       b.disabled = false;
     }
   };
+}
+function destructivePrompt(message, detail) {
+  return `<div class="destructive-confirm"><span>${icon("trash2")}</span><div><p>${message}</p><small>${detail}</small></div></div>`;
+}
+function permanentDeleteDialog(deck) {
+  if (!deck) return;
+  const type = deck.kind === "template" ? "模板" : "文稿";
+  showDialog(
+    `永久删除${type}`,
+    destructivePrompt(
+      `确定永久删除“${esc(deck.title)}”吗？`,
+      "内容、历史版本、素材和分享记录都将被删除，且无法恢复。",
+    ),
+    {
+      submit: "永久删除",
+      danger: true,
+      onSubmit: async () => {
+        await api(`/decks/${deck.id}/permanent`, { method: "DELETE" });
+        closeDialog();
+        await refresh();
+        toast(`已永久删除${type}`);
+      },
+    },
+  );
+}
+function emptyTrashDialog(count) {
+  if (!count) return;
+  showDialog(
+    "清空回收站",
+    destructivePrompt(
+      `确定永久删除回收站中的 ${count} 项内容吗？`,
+      "其中的文稿、模板、历史版本、素材和分享记录都将被删除，且无法恢复。",
+    ),
+    {
+      submit: "清空回收站",
+      danger: true,
+      onSubmit: async () => {
+        const result = await api("/decks/trash", { method: "DELETE" });
+        closeDialog();
+        await refresh();
+        toast(`已永久删除 ${result.count} 项内容`);
+      },
+    },
+  );
 }
 export async function versionHistoryDialog(id, onRestored = () => {}) {
   let deck = await api("/decks/" + id),

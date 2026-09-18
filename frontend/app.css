@@ -131,6 +131,19 @@ p {
 .danger {
   color: var(--danger) !important;
 }
+.button.danger-button {
+  border-color: #a84e46;
+  background: var(--danger);
+  color: #fff;
+}
+.button.danger-button:hover {
+  border-color: #954139;
+  background: #a84e46;
+}
+.button.danger:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;
@@ -278,6 +291,55 @@ p {
   justify-content: space-between;
   margin: 34px 0 27px;
   gap: 20px;
+}
+.trash-kind-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 28px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+.trash-kind-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 88px;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.trash-kind-tabs button:hover {
+  color: var(--ink);
+}
+.trash-kind-tabs button[aria-selected="true"] {
+  background: var(--paper);
+  color: var(--accent-ink);
+  box-shadow: 0 1px 4px #17362912;
+}
+.trash-kind-tabs small {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  font-size: 11px;
+  line-height: 1;
 }
 .search {
   display: flex;
@@ -515,6 +577,40 @@ p {
 }
 .empty-state .button {
   margin-top: 25px;
+}
+.destructive-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #b2574e2b;
+  border-radius: 12px;
+  background: #b2574e0a;
+}
+.destructive-confirm > span {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #b2574e12;
+  color: var(--danger);
+}
+.destructive-confirm > span .lucide {
+  width: 18px;
+  height: 18px;
+}
+.destructive-confirm p {
+  margin: 1px 0 6px;
+  color: var(--ink);
+  line-height: 1.6;
+}
+.destructive-confirm small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
 }
 .archived-cover {
   height: 100%;
@@ -1374,6 +1470,15 @@ dialog.wide {
   }
   .library-toolbar {
     margin: 25px 0 22px;
+  }
+  .trash-kind-tabs {
+    display: flex;
+    margin-top: 22px;
+  }
+  .trash-kind-tabs button {
+    flex: 1;
+    min-width: 0;
+    padding: 0 9px;
   }
   .search {
     width: auto;

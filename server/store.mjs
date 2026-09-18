@@ -45,6 +45,10 @@ export function createStore(dataDir, seedDir) {
   );
   CREATE INDEX IF NOT EXISTS deck_revisions_deck_created
     ON deck_revisions(deck_id, created_at DESC);`);
+  db.exec(`CREATE TABLE IF NOT EXISTS removed_builtins(
+    id TEXT PRIMARY KEY,
+    removed_at INTEGER NOT NULL
+  );`);
   db.exec(`INSERT OR IGNORE INTO deck_revisions(id,deck_id,version,created_at)
     SELECT revision,id,version,updated_at FROM decks`);
   const shareColumns = db.prepare("PRAGMA table_info(shares)").all();
@@ -487,6 +491,40 @@ export function createStore(dataDir, seedDir) {
       throw e;
     }
   }
+  function removeDeleted(rows) {
+    if (!rows.length) return { count: 0 };
+    db.exec("BEGIN");
+    try {
+      for (const d of rows) {
+        if (d.builtin)
+          db.prepare(
+            "INSERT OR REPLACE INTO removed_builtins(id,removed_at) VALUES(?,?)",
+          ).run(d.id, Date.now());
+        db.prepare("DELETE FROM shares WHERE deck_id=?").run(d.id);
+        db.prepare("DELETE FROM decks WHERE id=?").run(d.id);
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    for (const d of rows)
+      fs.rmSync(deckDir(d.id), { recursive: true, force: true });
+    return { count: rows.length };
+  }
+  function permanentlyDelete(id) {
+    const d = get(id, true);
+    if (!d.deletedAt) throw new HttpError(409, "请先将此内容移至回收站");
+    removeDeleted([d]);
+    return { ok: true, id: d.id, kind: d.kind };
+  }
+  function emptyTrash() {
+    const rows = db
+      .prepare("SELECT * FROM decks WHERE deleted_at IS NOT NULL")
+      .all()
+      .map(dto);
+    return removeDeleted(rows);
+  }
   if (seedDir && !raw("areal")) {
     const m = JSON.parse(
       fs.readFileSync(path.join(seedDir, "metadata.json"), "utf8"),
@@ -510,7 +548,11 @@ export function createStore(dataDir, seedDir) {
   }
   for (const entry of templates.filter((t) => t.id !== "blank")) {
     const id = "builtin_" + entry.id;
-    if (raw(id)) continue;
+    if (
+      raw(id) ||
+      db.prepare("SELECT 1 FROM removed_builtins WHERE id=?").get(id)
+    )
+      continue;
     create(
       {
         title: entry.name,
@@ -624,6 +666,8 @@ export function createStore(dataDir, seedDir) {
         .prepare("UPDATE shares SET download_count=download_count+1 WHERE id=?")
         .run(shareId),
     trash,
+    permanentlyDelete,
+    emptyTrash,
     list: () =>
       db.prepare("SELECT * FROM decks ORDER BY updated_at DESC").all().map(dto),
     restore: (id) => {
