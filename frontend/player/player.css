@@ -2680,14 +2680,13 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   content: "";
   position: absolute;
   z-index: 0;
-  bottom: -8px;
-  left: calc(var(--popover-arrow-left, 50%) - 8px);
-  width: 16px;
-  height: 16px;
-  border-right: 1px solid #ffffff1d;
-  border-bottom: 1px solid #ffffff1d;
-  background: #111a22f5;
-  transform: rotate(45deg);
+  bottom: -10px;
+  left: calc(var(--popover-arrow-left, 50%) - 9px);
+  width: 18px;
+  height: 10px;
+  background: #151e26;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  filter: drop-shadow(0 1px 0 #ffffff24);
 }
 .room-poll-popover-head,
 #roomPollBody,
@@ -2715,12 +2714,14 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .room-poll-popover.side-anchored::after,
 .room-rating-popover.side-anchored::after {
-  top: calc(var(--popover-arrow-top, 50%) - 8px);
-  right: -8px;
+  top: calc(var(--popover-arrow-top, 50%) - 9px);
+  right: -12px;
   bottom: auto;
   left: auto;
-  border-right: 1px solid #ffffff1d;
-  border-bottom: 1px solid #ffffff1d;
+  width: 12px;
+  height: 18px;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  filter: drop-shadow(1px 0 0 #ffffff24);
 }
 .room-poll-popover.side-anchored.is-opening,
 .room-rating-popover.side-anchored.is-opening {
