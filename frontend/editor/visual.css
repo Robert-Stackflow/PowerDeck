@@ -964,7 +964,7 @@
     padding: 7px 9px;
   }
 }
-@media (max-width: 760px) {
+@media (max-width: 1024px) {
   .editor:has(.visual-workspace:not([hidden])) {
     min-height: 720px;
     overflow: auto;
@@ -1049,7 +1049,7 @@
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1024px) {
   .visual-tool-group,
   .visual-toolbar-end {
     flex-shrink: 0;
@@ -1387,7 +1387,7 @@
 .color-error:empty {
   display: none;
 }
-@media (max-width: 760px) {
+@media (max-width: 1024px) {
   .visual-layout {
     grid-template-columns: 100px minmax(0, 1fr);
   }

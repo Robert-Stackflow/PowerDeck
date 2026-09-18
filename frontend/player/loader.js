@@ -7,6 +7,9 @@ const parts = location.pathname
     .filter(Boolean)
     .map(decodeURIComponent),
   shared = parts[0] === "s";
+const revision = shared
+  ? null
+  : new URLSearchParams(location.search).get("revision");
 let prefix;
 const frame = document.querySelector("#playerFrame");
 const loading = document.querySelector("#loading");
@@ -39,7 +42,11 @@ try {
       (await read("/api/resolve/" + encodeURIComponent(parts[1]))).id;
   const [meta, content, baseCSS, playerCSS, account] = await Promise.all([
     read(prefix + (shared ? "?view=1" : "")),
-    read(prefix + "/content"),
+    read(
+      revision
+        ? prefix + "/revisions/" + encodeURIComponent(revision)
+        : prefix + "/content",
+    ),
     fetch("/static/player/base.css").then((r) => r.text()),
     fetch("/static/player/player.css").then((r) => r.text()),
     read("/api/session"),
@@ -61,7 +68,7 @@ try {
           window: frame.contentWindow,
           hostWindow: window,
           icons,
-          deckId: meta.id,
+          deckId: revision ? `${meta.id}:revision:${revision}` : meta.id,
           width: meta.width,
           height: meta.height,
           onExit: shared
@@ -71,11 +78,12 @@ try {
               },
           allowNotes: meta.allowNotes !== false,
           toastPosition: site.toastPosition,
-          editURL: account.authenticated
-            ? "/edit/" + encodeURIComponent(meta.slug)
-            : null,
+          editURL:
+            account.authenticated && !revision
+              ? "/edit/" + encodeURIComponent(meta.slug)
+              : null,
           presenterURL:
-            account.authenticated && !shared
+            account.authenticated && !shared && !revision
               ? "/presenter/" + encodeURIComponent(meta.slug)
               : null,
           downloadURL:

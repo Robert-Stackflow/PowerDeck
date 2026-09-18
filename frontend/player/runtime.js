@@ -95,7 +95,8 @@ export function mountPresenter({
     drawing = null,
     touchStart = null,
     clickStart = null,
-    imageClickTimer;
+    imageClickTimer,
+    dockPressed = false;
   const presenterChannel =
     presenterURL && typeof hostWindow.BroadcastChannel === "function"
       ? new hostWindow.BroadcastChannel(`powerdeck-presenter:${deckId}`)
@@ -315,6 +316,7 @@ export function mountPresenter({
     figureReturn = null;
   const reduceMotion = () =>
     matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const hoverPointer = matchMedia("(hover: hover) and (pointer: fine)");
 
   const panelOpen = () =>
     ["overview", "notes", "figureViewer", "timingPanel"].some(
@@ -436,7 +438,8 @@ export function mountPresenter({
   function hideDock() {
     if (
       (openMenu() && openMenu().id !== "contextMenu") ||
-      dock.matches(":hover") ||
+      dockPressed ||
+      (hoverPointer.matches && dock.matches(":hover")) ||
       dock.querySelector(":focus-visible")
     ) {
       showDock(1100);
@@ -789,11 +792,32 @@ export function mountPresenter({
   $("moreBtn").onclick = (e) =>
     showMenu("moreMenu", { anchor: e.currentTarget, keyboard: e.detail === 0 });
   $("dockReveal").onclick = () => showDock(4000);
-  $("dockReveal").onmouseenter = () => showDock();
+  $("dockReveal").onmouseenter = () => {
+    if (hoverPointer.matches) showDock();
+  };
   $("dockReveal").onfocus = () => showDock();
-  dock.onmouseenter = () => showDock();
-  dock.onmouseleave = () => showDock(1100);
+  dock.onmouseenter = () => {
+    if (hoverPointer.matches) showDock();
+  };
+  dock.onmouseleave = () => {
+    if (hoverPointer.matches) showDock(1100);
+  };
   dock.onfocusin = () => showDock(4000);
+  dock.addEventListener(
+    "pointerdown",
+    () => {
+      dockPressed = true;
+      showDock(5000);
+    },
+    true,
+  );
+  const releaseDock = () => {
+    if (!dockPressed) return;
+    dockPressed = false;
+    showDock(4000);
+  };
+  dock.addEventListener("pointerup", releaseDock, true);
+  dock.addEventListener("pointercancel", releaseDock, true);
   for (const el of document.querySelectorAll(".presenter-menu")) {
     el.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1051,6 +1075,13 @@ export function mountPresenter({
     )
       return;
     e.preventDefault();
+    const inDockRevealZone =
+      e.clientX >= window.innerWidth * 0.3 &&
+      e.clientX <= window.innerWidth * 0.7;
+    if (inDockRevealZone) {
+      showDock(4000);
+      return;
+    }
     const nextPage =
       current + (e.shiftKey || e.clientX < window.innerWidth / 2 ? -1 : 1);
     if (e.target.closest(".zoomable")) {

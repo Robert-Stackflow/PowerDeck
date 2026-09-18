@@ -126,6 +126,8 @@ button {
   overflow: hidden;
   cursor: pointer;
   outline: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .slide-frame-wrap:focus-visible {
   box-shadow: inset 0 0 0 2px #57c98a;
@@ -262,6 +264,8 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .presenter-controls button:hover {
   background: #25312b;
@@ -308,5 +312,100 @@ button {
   .presenter-side {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  html,
+  body {
+    overflow: hidden;
+  }
+  .presenter-topbar {
+    height: 58px;
+    gap: 10px;
+    padding: 0 12px;
+  }
+  .presenter-title {
+    flex: 1;
+  }
+  .presenter-title h1 {
+    max-width: 42vw;
+  }
+  .presenter-title p,
+  .presenter-status span {
+    display: none;
+  }
+  .presenter-status {
+    margin-left: 0;
+  }
+  .session-clock {
+    min-width: 68px;
+    font-size: 19px;
+  }
+  .presenter-main {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .current-card,
+  .next-card,
+  .notes-card {
+    flex: none;
+  }
+  .current-card {
+    height: min(58vw, 310px);
+    min-height: 220px;
+  }
+  .presenter-side {
+    display: contents;
+  }
+  .next-card {
+    height: min(48vw, 250px);
+    min-height: 180px;
+  }
+  .notes-card {
+    min-height: 280px;
+  }
+  .speaker-notes {
+    min-height: 190px;
+    padding: 15px;
+    font-size: 14px;
+  }
+  .presenter-controls {
+    height: 62px;
+    justify-content: flex-start;
+    gap: 7px;
+    padding: 9px 10px calc(9px + env(safe-area-inset-bottom));
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .presenter-controls::-webkit-scrollbar {
+    display: none;
+  }
+  .presenter-controls button {
+    min-width: 42px;
+    height: 42px;
+    padding: 0 11px;
+    flex: none;
+  }
+  .presenter-controls .projection-button,
+  .presenter-controls .timer-toggle {
+    margin-left: 0;
+  }
+  .presenter-counter {
+    min-width: 70px;
+    flex: none;
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .presenter-controls button:hover {
+    background: #1b2420;
+    border-color: #ffffff18;
+  }
+  .presenter-controls .primary:hover {
+    background: #2f745b;
+    border-color: #3d8b6d;
   }
 }

@@ -359,56 +359,112 @@ function renderCards() {
   };
 }
 export async function versionHistoryDialog(id, onRestored = () => {}) {
-  let deck = await api("/decks/" + id);
-  const render = async (selectedId) => {
-    const history = (await api(`/decks/${id}/revisions`)).revisions;
-    const selected =
-      history.find((item) => item.id === selectedId) || history[0];
-    showDialog(
-      "版本历史",
-      `<div class="version-history"><div class="revision-list" role="list">${history
-        .map(
-          (item, index) =>
-            `<button type="button" class="revision-item ${item.id === selected.id ? "active" : ""}" data-revision="${item.id}" role="listitem"><span><b>${item.current ? "当前版本" : `版本 ${item.version}`}</b><small>${new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</small></span>${item.current ? "<em>当前</em>" : index === history.length - 1 ? "<em>最早</em>" : ""}</button>`,
-        )
-        .join(
-          "",
-        )}</div><div class="revision-preview"><iframe title="历史版本预览" sandbox="allow-same-origin"></iframe><div class="revision-preview-footer"><span>版本 ${selected.version}</span>${selected.current ? '<span class="revision-current">正在使用</span>' : `<button type="button" class="button primary" id="restoreRevision">${icon("rotateCcw")}恢复此版本</button>`}</div></div></div>`,
-      { wide: true, className: "version-dialog" },
-    );
-    const content = await api(`/decks/${id}/revisions/${selected.id}`);
-    if (!modal.open) return;
-    const frame = modal.querySelector(".revision-preview iframe");
-    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><base href="/api/decks/${id}/files/"><style>${content.css}</style><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#eef2ef}#deck{position:absolute;left:0;top:0;width:${deck.width}px;height:${deck.height}px;transform-origin:0 0;transform:scale(min(calc(100vw / ${deck.width}),calc(100vh / ${deck.height})))}.slide{display:none!important}.slide:first-child{display:block!important;position:absolute!important;inset:0!important}</style></head><body><div id="deck">${content.html}</div></body></html>`;
-    modal
+  let deck = await api("/decks/" + id),
+    history = (await api(`/decks/${id}/revisions`)).revisions,
+    selected = history[0],
+    previewPage = 1,
+    previewSlides = [],
+    requestId = 0;
+  const formatDate = (value) =>
+    new Intl.DateTimeFormat("zh-CN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+  showDialog(
+    "版本历史",
+    `<div class="version-history"><div class="revision-list" role="list"></div><section class="revision-preview"><header class="revision-preview-heading"><div><b id="revisionVersion"></b><small id="revisionDate"></small></div><a id="presentRevision" class="button" target="_blank" rel="noopener">${icon("presentation")}演示此版本</a></header><div class="revision-preview-stage" aria-busy="true"><iframe title="历史版本预览" sandbox="allow-same-origin"></iframe><div class="revision-preview-loading">正在准备预览…</div></div><footer class="revision-preview-footer"><div class="revision-page-controls"><button type="button" class="icon-button" id="revisionPrevious" aria-label="上一页">${icon("prev")}</button><span id="revisionPage"></span><button type="button" class="icon-button" id="revisionNext" aria-label="下一页">${icon("next")}</button></div><span class="revision-current" id="revisionCurrent">正在使用</span><button type="button" class="button primary" id="restoreRevision">${icon("rotateCcw")}恢复此版本</button></footer></section></div>`,
+    { wide: true, className: "version-dialog" },
+  );
+  const list = modal.querySelector(".revision-list"),
+    frame = modal.querySelector(".revision-preview iframe"),
+    stage = modal.querySelector(".revision-preview-stage"),
+    restoreButton = modal.querySelector("#restoreRevision"),
+    currentLabel = modal.querySelector("#revisionCurrent"),
+    previousButton = modal.querySelector("#revisionPrevious"),
+    nextButton = modal.querySelector("#revisionNext"),
+    pageLabel = modal.querySelector("#revisionPage");
+  const renderList = () => {
+    list.innerHTML = history
+      .map(
+        (item, index) =>
+          `<button type="button" class="revision-item ${item.id === selected?.id ? "active" : ""}" data-revision="${item.id}" role="listitem"><span><b>${item.current ? "当前版本" : `版本 ${item.version}`}</b><small>${formatDate(item.createdAt)}</small></span>${item.current ? "<em>当前</em>" : index === history.length - 1 ? "<em>最早</em>" : ""}</button>`,
+      )
+      .join("");
+  };
+  const showPreviewPage = (page) => {
+    previewPage = Math.max(1, Math.min(previewSlides.length || 1, page));
+    previewSlides.forEach((slide, index) => {
+      slide.style.setProperty(
+        "display",
+        index === previewPage - 1 ? "block" : "none",
+        "important",
+      );
+      slide.setAttribute("aria-hidden", String(index !== previewPage - 1));
+    });
+    pageLabel.textContent = `${previewPage} / ${previewSlides.length || 1}`;
+    previousButton.disabled = previewPage <= 1;
+    nextButton.disabled = previewPage >= previewSlides.length;
+  };
+  const selectRevision = async (revisionId) => {
+    selected = history.find((item) => item.id === revisionId) || history[0];
+    renderList();
+    list
       .querySelectorAll("[data-revision]")
       .forEach(
         (button) =>
           (button.onclick = () =>
-            render(button.dataset.revision).catch((error) =>
+            selectRevision(button.dataset.revision).catch((error) =>
               toast(error.message),
             )),
       );
-    modal
-      .querySelector("#restoreRevision")
-      ?.addEventListener("click", async (event) => {
-        const button = event.currentTarget;
-        button.disabled = true;
-        try {
-          deck = await api(`/decks/${id}/revisions/${selected.id}/restore`, {
-            method: "POST",
-            body: { version: deck.version },
-          });
-          await onRestored(deck);
-          toast("历史版本已恢复，并保留了恢复前的版本");
-          await render();
-        } catch (error) {
-          toast(error.message);
-          button.disabled = false;
-        }
-      });
+    modal.querySelector("#revisionVersion").textContent = selected.current
+      ? "当前版本"
+      : `版本 ${selected.version}`;
+    modal.querySelector("#revisionDate").textContent = formatDate(
+      selected.createdAt,
+    );
+    modal.querySelector("#presentRevision").href =
+      `/present/${encodeURIComponent(deck.slug)}?revision=${encodeURIComponent(selected.id)}#1`;
+    currentLabel.hidden = !selected.current;
+    restoreButton.hidden = selected.current;
+    previewSlides = [];
+    previewPage = 1;
+    showPreviewPage(1);
+    stage.setAttribute("aria-busy", "true");
+    const activeRequest = ++requestId;
+    const content = await api(`/decks/${id}/revisions/${selected.id}`);
+    if (!modal.open || activeRequest !== requestId) return;
+    frame.onload = () => {
+      if (activeRequest !== requestId) return;
+      previewSlides = [
+        ...frame.contentDocument.querySelectorAll("#deck > .slide"),
+      ];
+      showPreviewPage(1);
+      stage.setAttribute("aria-busy", "false");
+    };
+    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><base href="/api/decks/${id}/files/"><style>${content.css}</style><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#e9eeeb}#deck{position:absolute;left:50%;top:50%;width:${deck.width}px;height:${deck.height}px;transform-origin:center;transform:translate(-50%,-50%) scale(min(calc(100vw / ${deck.width}),calc(100vh / ${deck.height})))}#deck>.slide{display:none!important;position:absolute!important;inset:0!important}</style></head><body><div id="deck">${content.html}</div></body></html>`;
   };
-  await render();
+  previousButton.onclick = () => showPreviewPage(previewPage - 1);
+  nextButton.onclick = () => showPreviewPage(previewPage + 1);
+  restoreButton.onclick = async () => {
+    restoreButton.disabled = true;
+    try {
+      deck = await api(`/decks/${id}/revisions/${selected.id}/restore`, {
+        method: "POST",
+        body: { version: deck.version },
+      });
+      await onRestored(deck);
+      history = (await api(`/decks/${id}/revisions`)).revisions;
+      selected = history[0];
+      toast("历史版本已恢复，并保留了恢复前的版本");
+      await selectRevision(selected.id);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      restoreButton.disabled = false;
+    }
+  };
+  await selectRevision(selected.id);
 }
 export function exportDialog(deck, { prepare = async () => deck } = {}) {
   showDialog(
