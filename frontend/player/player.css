@@ -1194,6 +1194,7 @@ body.panel-open #controls {
     line-height: 1.75;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   #overview,
   #notes,
@@ -5004,6 +5005,242 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   }
   #roomPanel.room-setup-mode .room-session-card > .overlay-head,
   #roomPanel.room-dashboard-mode .room-session-card > .overlay-head {
+    top: 12px;
+    right: 12px;
+  }
+}
+
+/* Phone remote uses the same single-surface dialog language as rooms. */
+#remoteControlPanel {
+  width: min(900px, calc(100vw - 48px));
+  height: min(540px, calc(100dvh - 48px));
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  box-shadow: none;
+}
+#remoteControlPanel .remote-session-card {
+  position: relative;
+  height: 100%;
+  overflow: visible;
+}
+#remoteControlPanel .remote-session-card > .overlay-head {
+  position: absolute;
+  z-index: 8;
+  top: -13px;
+  right: -13px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  pointer-events: none;
+}
+#remoteControlPanel .remote-session-card > .overlay-head > div {
+  display: none;
+}
+#remoteControlPanel .remote-session-card > .overlay-head .dialog-close {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #d7e0db;
+  border-radius: 13px;
+  background: #f7f9f8f2;
+  color: #60766b;
+  box-shadow: 0 7px 22px #182d2440;
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+#remoteSessionBody {
+  width: 100%;
+  height: 100%;
+}
+#remoteSessionBody.remote-control-shell {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(330px, 0.88fr) minmax(0, 1.12fr);
+  overflow: hidden;
+  border: 1px solid #dbe4df;
+  border-radius: 22px;
+  background: #fffdfa;
+  box-shadow:
+    0 28px 90px #0b19294f,
+    0 3px 12px #192a401a;
+}
+#remoteSessionBody.session-loading,
+#remoteSessionBody.session-error {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dbe4df;
+  border-radius: 22px;
+  background: #fffdfa;
+  box-shadow:
+    0 28px 90px #0b19294f,
+    0 3px 12px #192a401a;
+}
+.remote-connect-pane,
+.remote-devices-pane {
+  min-width: 0;
+  min-height: 0;
+}
+.remote-connect-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px;
+  border-right: 1px solid #dfe6e2;
+  background: linear-gradient(155deg, #f2f6f3 0%, #edf3ef 100%);
+}
+.remote-devices-pane {
+  display: flex;
+  flex-direction: column;
+  padding: 28px;
+  background: #fffdfa;
+}
+#remoteControlPanel .remote-pane-heading {
+  position: static;
+  inset: auto;
+  width: 100%;
+  height: auto;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0 0 22px;
+  padding: 0;
+  transform: none;
+}
+#remoteControlPanel .remote-pane-heading > span {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  flex: none;
+  place-items: center;
+  border-radius: 13px;
+  background: #dfece5;
+  color: #34735a;
+}
+#remoteControlPanel .remote-pane-heading > span svg {
+  width: 20px;
+  height: 20px;
+}
+#remoteControlPanel .remote-pane-heading > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+#remoteControlPanel .remote-pane-heading small {
+  color: #829088;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+}
+#remoteControlPanel .remote-pane-heading h3 {
+  margin: 0;
+  color: #294239;
+  font-size: 17px;
+}
+#remoteControlPanel .remote-pane-heading em {
+  margin-left: auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e7f2ec;
+  color: #347259;
+  font-size: 10px;
+  font-style: normal;
+}
+#remoteControlPanel .session-qr-frame {
+  width: 174px;
+  height: 174px;
+}
+.remote-link-block {
+  width: 100%;
+  margin-top: 22px;
+}
+.remote-link-block > label {
+  color: #64766d;
+  font-size: 10px;
+  font-weight: 650;
+}
+#remoteControlPanel .session-link input {
+  color: #344a40;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.remote-session-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: #64766d;
+  font-size: 10px;
+}
+.remote-session-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #48a276;
+  box-shadow: 0 0 0 4px #48a2761b;
+}
+.remote-devices-pane .remote-pane-heading {
+  padding-bottom: 17px;
+  border-bottom: 1px solid #e2e8e4;
+}
+.remote-devices-pane .connection-list {
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+  max-height: none;
+  padding-right: 3px;
+}
+.remote-devices-pane .connection-list > .session-empty {
+  align-self: center;
+  margin: auto 0;
+}
+
+@media (max-width: 700px) {
+  #remoteControlPanel {
+    width: calc(100vw - 30px);
+    height: min(820px, calc(100dvh - 36px));
+    max-height: calc(100dvh - 36px);
+  }
+  #remoteSessionBody.remote-control-shell {
+    grid-template-columns: 1fr;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .remote-connect-pane {
+    padding: 22px;
+    border-right: 0;
+    border-bottom: 1px solid #dfe6e2;
+  }
+  .remote-devices-pane {
+    min-height: 260px;
+    padding: 22px;
+  }
+  #remoteControlPanel .session-qr-frame {
+    width: 148px;
+    height: 148px;
+  }
+}
+
+@media (max-width: 600px) {
+  #remoteControlPanel {
+    width: 100%;
+    height: min(92dvh, 820px);
+    max-height: min(92dvh, 820px);
+    border-radius: 22px 22px 0 0;
+  }
+  #remoteSessionBody.remote-control-shell,
+  #remoteSessionBody.session-loading,
+  #remoteSessionBody.session-error {
+    border-width: 1px 0 0;
+    border-radius: 22px 22px 0 0;
+  }
+  #remoteControlPanel .remote-session-card > .overlay-head {
     top: 12px;
     right: 12px;
   }

@@ -1203,8 +1203,8 @@ export function mountPresenter({
         method: "POST",
         body: { deckId, page: current },
       });
-      body.className = "session-connect";
-      body.innerHTML = `<div class="session-connect-main"><div class="session-qr"><button type="button" class="session-qr-frame" aria-label="放大手机遥控二维码"><img src="${escapeHTML(remoteSession.qr)}" alt="手机遥控二维码"></button><span>${ico("smartphone")}扫码连接</span></div><div><label for="remoteControlURL">遥控地址</label><div class="session-link"><input id="remoteControlURL" value="${escapeHTML(remoteSession.url)}" readonly><button type="button">${ico("check")}复制链接</button></div><small><i></i>已连接当前演示</small></div></div><section class="session-connections"><div class="connection-heading"><div><h3>连接设备</h3><p>近期开启此遥控器的设备</p></div><span id="remoteDeviceCount">0 台</span></div><div id="remoteDeviceList" class="connection-list">${connectionsMarkup([])}</div></section>`;
+      body.className = "remote-control-shell";
+      body.innerHTML = `<section class="remote-connect-pane"><header class="remote-pane-heading"><span>${ico("smartphone")}</span><div><small>扫码连接</small><h3>手机遥控</h3></div></header><div class="session-qr"><button type="button" class="session-qr-frame" aria-label="放大手机遥控二维码"><img src="${escapeHTML(remoteSession.qr)}" alt="手机遥控二维码"></button><span>${ico("smartphone")}使用手机扫码</span></div><div class="remote-link-block"><label for="remoteControlURL">遥控地址</label><div class="session-link"><input id="remoteControlURL" value="${escapeHTML(remoteSession.url)}" readonly><button type="button">${ico("check")}复制</button></div><div class="remote-session-status"><i></i><span>遥控会话已开启</span></div></div></section><section class="remote-devices-pane"><header class="remote-pane-heading"><div><small>实时设备</small><h3>连接设备</h3></div><em id="remoteDeviceCount">0 台</em></header><div id="remoteDeviceList" class="connection-list">${connectionsMarkup([])}</div></section>`;
       body.querySelector(".session-link button").onclick = (event) =>
         copySessionLink(event.currentTarget, remoteSession.url);
       bindSessionQR(body);
