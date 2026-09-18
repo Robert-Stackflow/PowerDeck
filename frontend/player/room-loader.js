@@ -42,21 +42,45 @@ function setStatus(text, state = "") {
   status.hidden = state === "connected";
 }
 
+async function joinRoom(prefix, name, password = "") {
+  const response = await fetch(`${prefix}/join`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-PowerDeck-Device": deviceId,
+    },
+    body: JSON.stringify({ name, password }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "无法加入房间");
+  localStorage.setItem("powerdeck-room-name", result.name);
+  return result;
+}
+
 async function ensureJoined(prefix) {
   const info = await read(`${prefix}/join-info`);
   if (info.joined) return;
+  const savedName = localStorage.getItem("powerdeck-room-name") || "";
+  if (!info.passwordProtected && info.nameLocked && info.name) {
+    await joinRoom(prefix, info.name);
+    joinScreen.hidden = true;
+    loading.hidden = false;
+    status.hidden = false;
+    return;
+  }
   loading.hidden = true;
   status.hidden = true;
   joinScreen.hidden = false;
   document.querySelector("#roomJoinTitle").textContent = info.title;
   const passwordField = document.querySelector("#roomPasswordField"),
     passwordInput = joinForm.elements.password,
-    savedName = localStorage.getItem("powerdeck-room-name") || "";
+    submitButton = joinForm.querySelector('[type="submit"]');
   passwordField.hidden = !info.passwordProtected;
   passwordInput.required = info.passwordProtected;
   passwordInput.value = "";
   joinForm.elements.name.value = info.name || savedName;
   joinForm.elements.name.readOnly = info.nameLocked;
+  submitButton.disabled = false;
   await new Promise((resolve) => {
     joinForm.onsubmit = async (event) => {
       event.preventDefault();
@@ -66,20 +90,7 @@ async function ensureJoined(prefix) {
       button.disabled = true;
       error.textContent = "";
       try {
-        const response = await fetch(`${prefix}/join`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-PowerDeck-Device": deviceId,
-          },
-          body: JSON.stringify({
-            name: values.get("name"),
-            password: values.get("password"),
-          }),
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || "无法加入房间");
-        localStorage.setItem("powerdeck-room-name", result.name);
+        await joinRoom(prefix, values.get("name"), values.get("password"));
         joinScreen.hidden = true;
         loading.hidden = false;
         status.hidden = false;

@@ -145,7 +145,8 @@ export function mountPresenter({
       hostWindow.crypto.randomUUID();
   const audienceVoteKey = (pollId) =>
       `voted:${interactionToken}:${pollId || "unknown"}`,
-    audienceRatingKey = () => `rating:${interactionToken}`;
+    audienceRatingKey = () => `rating:${interactionToken}`,
+    roomHostKey = `powerdeck-room-host:${deckId}`;
   localStorage.setItem(audienceVisitorKey, audienceVisitor);
   const sessionRequest = async (path, options = {}) => {
     const response = await hostWindow.fetch("/api" + path, {
@@ -407,7 +408,7 @@ export function mountPresenter({
       "☕",
     ],
     roomFeedMarkup = (host = false) =>
-      `<aside id="roomLiveFeed" class="room-live-feed${host ? " room-host-only" : ""}" aria-live="polite"><button id="roomFeedToggle" class="room-feed-toggle" type="button" aria-label="收起互动评论" aria-expanded="true"><span><b id="roomFeedOnline">1</b><em id="roomFeedLatency">连接中</em></span><i class="room-feed-unread" hidden>0</i></button><div class="room-feed-expanded"><div id="roomFeedItems"><p>互动内容会显示在这里</p></div><form id="roomFeedComposer" class="room-feed-composer" data-host="${host}"><div class="room-emoji-picker" hidden><header>选择表情</header><div>${roomEmojis.map((emoji) => `<button type="button" data-room-emoji-value="${emoji}" aria-label="插入 ${emoji}">${emoji}</button>`).join("")}</div></div><button type="button" class="room-emoji-toggle" aria-label="选择 Emoji" aria-expanded="false">${ico("smile")}</button><input name="body" maxlength="500" autocomplete="off" placeholder="发表评论…" aria-label="发表评论"><button type="submit" class="room-comment-send" aria-label="发送评论">${ico("next")}</button></form></div><div id="roomFeedToasts" class="room-feed-toasts" aria-live="polite"></div></aside>`;
+      `<aside id="roomLiveFeed" class="room-live-feed${host ? " room-host-only" : ""}" aria-live="polite"><button id="roomFeedToggle" class="room-feed-toggle" type="button" aria-label="收起互动评论" aria-expanded="true"><span class="room-feed-presence"><b id="roomFeedOnline">1</b><em id="roomFeedLatency">连接中</em></span><span class="room-feed-idle" hidden>···</span><i class="room-feed-unread" hidden>0</i></button><div class="room-feed-expanded"><div id="roomFeedItems"><p>互动内容会显示在这里</p></div><form id="roomFeedComposer" class="room-feed-composer" data-host="${host}"><div class="room-emoji-picker" hidden><header>选择表情</header><div>${roomEmojis.map((emoji) => `<button type="button" data-room-emoji-value="${emoji}" aria-label="插入 ${emoji}">${emoji}</button>`).join("")}</div></div><button type="button" class="room-emoji-toggle" aria-label="选择 Emoji" aria-expanded="false">${ico("smile")}</button><input name="body" maxlength="500" autocomplete="off" placeholder="发表评论…" aria-label="发表评论"><button type="submit" class="room-comment-send" aria-label="发送评论">${ico("next")}</button></form></div><div id="roomFeedToasts" class="room-feed-toasts" aria-live="polite"></div></aside>`;
   const sessionToolsMarkup = presenterURL
     ? `<span class="nav-divider session-divider" aria-hidden="true"></span><div class="session-control-group" role="group" aria-label="演讲辅助">${dockButton("presenterViewBtn", "presenter", "演讲者视图")}${dockButton("remoteControlBtn", "smartphone", "手机遥控")}${dockButton("roomBtn", "room", "房间")}</div>`
     : "";
@@ -490,6 +491,7 @@ export function mountPresenter({
         : "");
   document.body.append(ui);
   bindRoomFeedComposer();
+  if (viewerMode) applyRoomFeedPermissions(viewerPermissions);
   if ($("roomPollPanel"))
     $("roomPollPanel").querySelector("[data-close-room-polls]").onclick = () =>
       ($("roomPollPanel").hidden = true);
@@ -1134,6 +1136,20 @@ export function mountPresenter({
         ? `${Math.round(latency)} ms`
         : "连接中";
   }
+  function applyRoomFeedPermissions(permissions) {
+    const feed = $("roomLiveFeed"),
+      toggle = $("roomFeedToggle"),
+      presence = feed?.querySelector(".room-feed-presence"),
+      idle = feed?.querySelector(".room-feed-idle");
+    if (!feed || !toggle) return;
+    const showList = !!permissions.showInteractionFeed,
+      showPresence = !!permissions.showOnlineCount;
+    feed.classList.toggle("status-only", !showList);
+    if (presence) presence.hidden = !showPresence;
+    if (idle) idle.hidden = showPresence;
+    toggle.disabled = !showList;
+    if (!showList) setRoomFeedCollapsed(true);
+  }
   function ensureRoomChrome() {
     if (!roomSession || viewerMode) return;
     const shouldShowFeed =
@@ -1144,15 +1160,7 @@ export function mountPresenter({
       ui.insertAdjacentHTML("beforeend", roomFeedMarkup(true));
     else if (!shouldShowFeed) $("roomLiveFeed")?.remove();
     bindRoomFeedComposer();
-    $("roomLiveFeed")?.classList.toggle(
-      "status-only",
-      !roomSession.permissions.showInteractionFeed,
-    );
-    if ($("roomFeedToggle"))
-      $("roomFeedToggle").disabled =
-        !roomSession.permissions.showInteractionFeed;
-    if (!roomSession.permissions.showInteractionFeed)
-      setRoomFeedCollapsed(true);
+    applyRoomFeedPermissions(roomSession.permissions);
     updateRoomPresence(roomSession.connections?.length || 0, roomLatency);
   }
   function bindRoomFeedComposer() {
@@ -1617,6 +1625,7 @@ export function mountPresenter({
     hostWindow.clearInterval(roomPingInterval);
     audienceInterval = 0;
     roomLatency = null;
+    hostWindow.sessionStorage.removeItem(roomHostKey);
     $("roomLiveFeed")?.remove();
     dismissPanel();
     toast("房间已结束");
@@ -1673,6 +1682,13 @@ export function mountPresenter({
           },
         });
         audienceSession = roomSession.interaction;
+        hostWindow.sessionStorage.setItem(
+          roomHostKey,
+          JSON.stringify({
+            token: roomSession.token,
+            hostToken: roomSession.hostToken,
+          }),
+        );
         roomTab = "settings";
         connectRoom();
         ensureRoomChrome();
@@ -1683,6 +1699,27 @@ export function mountPresenter({
         toast(error.message);
       }
     };
+  }
+  async function restoreRoomSession() {
+    let saved;
+    try {
+      saved = JSON.parse(hostWindow.sessionStorage.getItem(roomHostKey));
+    } catch {}
+    if (!saved?.token || !saved?.hostToken) return;
+    try {
+      roomSession = await sessionRequest(`/rooms/${saved.token}/host`, {
+        headers: { "X-Room-Host": saved.hostToken },
+      });
+      audienceSession = roomSession.interaction;
+      roomTab = "settings";
+      connectRoom();
+      ensureRoomChrome();
+      startAudiencePolling();
+    } catch {
+      hostWindow.sessionStorage.removeItem(roomHostKey);
+      roomSession = null;
+      audienceSession = null;
+    }
   }
   function openRoom() {
     openPanel("roomPanel");
@@ -2081,13 +2118,7 @@ export function mountPresenter({
       roomFeedSignature = "";
       renderLiveFeed(roomFeedState || { poll: null, polls: [], comments: [] });
     } else if (!showFeed) $("roomLiveFeed")?.remove();
-    $("roomLiveFeed")?.classList.toggle(
-      "status-only",
-      !permissions.showInteractionFeed,
-    );
-    if ($("roomFeedToggle"))
-      $("roomFeedToggle").disabled = !permissions.showInteractionFeed;
-    if (!permissions.showInteractionFeed) setRoomFeedCollapsed(true);
+    applyRoomFeedPermissions(permissions);
   }
   function act(action) {
     if (action.startsWith("tool:")) {
@@ -2886,12 +2917,6 @@ export function mountPresenter({
     hostWindow.clearInterval(audienceInterval);
     hostWindow.clearInterval(roomPingInterval);
     roomSocket?.close();
-    if (roomSession)
-      sessionRequest(`/rooms/${roomSession.token}`, {
-        method: "DELETE",
-        headers: { "X-Room-Host": roomSession.hostToken },
-        keepalive: true,
-      }).catch(() => {});
     if (remoteSession)
       sessionRequest(`/presenter-sessions/${remoteSession.token}`, {
         method: "DELETE",
@@ -2907,6 +2932,7 @@ export function mountPresenter({
     $("notesBtn").hidden = true;
   size();
   go(viewerMode ? initialPage : fromHash());
+  if (!viewerMode && presenterURL) void restoreRoomSession();
   showDock(3500);
   window.presentation = {
     go,

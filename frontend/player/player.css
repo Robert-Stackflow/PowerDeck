@@ -2172,6 +2172,9 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   align-items: center;
   gap: 6px;
 }
+.room-feed-toggle > span[hidden] {
+  display: none;
+}
 .room-feed-toggle b {
   font-size: 10px;
 }

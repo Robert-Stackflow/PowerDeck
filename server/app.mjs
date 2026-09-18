@@ -273,6 +273,26 @@ export async function createApp({
           );
           return json(res, 200, { ok: true, name: joined.name });
         }
+        if (parts[3] === "host" && method === "GET") {
+          const room = rooms.requireHost(
+              roomToken,
+              String(req.headers["x-room-host"] || ""),
+            ),
+            state = rooms.adminState(room),
+            audience = platform.audienceState(room.interactionToken, true);
+          state.qr = await QRCode.toDataURL(state.url, {
+            width: 360,
+            margin: 1,
+            color: { dark: "#13251f", light: "#ffffff" },
+          });
+          audience.qr = await QRCode.toDataURL(audience.url, {
+            width: 320,
+            margin: 1,
+            color: { dark: "#13251f", light: "#ffffff" },
+          });
+          state.interaction = audience;
+          return json(res, 200, state);
+        }
         const room = rooms.get(roomToken);
         if (!room) throw new HttpError(404, "房间不存在或已结束");
         if (method === "GET")

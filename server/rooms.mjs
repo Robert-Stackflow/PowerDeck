@@ -241,9 +241,11 @@ export function createRooms(store, publicURL = "") {
     if (Object.hasOwn(input, "password")) {
       const password = String(input.password || "").trim();
       room.password = password ? passwordDigest(password) : null;
-      room.admissions.clear();
-      for (const client of [...room.clients])
-        if (client.role === "viewer") client.ws.close(1008, "access changed");
+      if (room.password) {
+        room.admissions.clear();
+        for (const client of [...room.clients])
+          if (client.role === "viewer") client.ws.close(1008, "access changed");
+      }
     }
     room.touchedAt = Date.now();
     broadcast(room, { type: "state", state: publicState(room) });
