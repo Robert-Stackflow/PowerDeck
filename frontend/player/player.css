@@ -1725,14 +1725,25 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   width: 16px;
 }
 .connection-list article > div {
-  display: grid;
-  gap: 1px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 2px;
   min-width: 0;
+}
+.connection-list article > div > b,
+.connection-list article > div > small,
+.connection-list article > div > em {
+  display: block;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 .connection-list article b {
   color: #314b42;
   font-size: 11px;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 .connection-list article small,
 .connection-list article em {
@@ -1740,7 +1751,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   color: #89958f;
   font-size: 9px;
   font-style: normal;
-  line-height: 1.35;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
