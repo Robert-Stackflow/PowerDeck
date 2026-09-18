@@ -2214,17 +2214,12 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .room-feed-toggle b,
 .room-feed-toggle em {
+  color: #e6efeb;
   font-size: 11px;
   font-style: normal;
   font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-}
-.room-feed-toggle b {
-  color: #eef7f2;
-}
-.room-feed-toggle em {
-  color: #a9b7b0;
 }
 .room-feed-collapse {
   width: 22px;
@@ -2266,7 +2261,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 }
 .room-live-feed.collapsed {
   bottom: max(18px, env(safe-area-inset-bottom));
-  width: 144px;
+  width: 122px;
   max-height: none;
 }
 .room-live-feed.collapsed .room-feed-expanded {
@@ -2286,7 +2281,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   visibility: hidden;
 }
 .room-live-feed.collapsed .room-feed-toggle {
-  width: 144px;
+  width: 122px;
 }
 .room-live-feed.collapsed .room-feed-collapse {
   display: none !important;
@@ -5318,7 +5313,7 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   }
   body.room-viewer .room-live-feed.collapsed {
     bottom: max(12px, env(safe-area-inset-bottom));
-    width: 144px;
+    width: 122px;
   }
   body.room-viewer .room-live-feed:not(.collapsed) .room-feed-expanded {
     max-height: min(41dvh, 360px);
