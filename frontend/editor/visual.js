@@ -39,7 +39,7 @@ export async function mountVisualEditor({
   initialPage = 1,
 }) {
   const loadingOverlay = root.querySelector(".editor-loading-overlay");
-  root.innerHTML = `<div class="visual-toolbar"><div class="visual-tool-group">${tool("visualUndo", "undo", "撤销")}${tool("visualRedo", "redo", "重做")}</div><div class="visual-tool-group"><button class="button subtle" id="insertPage" aria-haspopup="menu" aria-expanded="false">${icon("plus")}新增页面${icon("down")}</button></div><div class="visual-tool-group"><button class="button subtle" id="insertText">${icon("type")}文字</button><button class="button subtle" id="insertImage">${icon("image")}图片</button><button class="button subtle" id="insertShape" aria-haspopup="dialog">${icon("square")}形状${icon("down")}</button><button class="button subtle" id="insertFormula">${icon("sigma")}公式</button><button class="button subtle" id="insertLink" disabled>${icon("link")}链接</button></div><div class="visual-toolbar-end">${tool("snapToggle", "magnet", "对齐辅助线（按住 Alt 暂停吸附）")}</div></div><div class="visual-layout"><aside class="slide-rail"><div id="slideList" class="slide-list" aria-label="幻灯片页面"></div></aside><div class="visual-center"><div class="visual-stage"><iframe id="visualCanvas" title="可视化编辑画布" sandbox="allow-same-origin"></iframe></div></div><aside class="visual-inspector"><div class="inspector-tabs" role="tablist" aria-label="页面侧边栏"><button type="button" id="inspectorPageTab" role="tab" data-inspector-tab="page" aria-selected="true" aria-controls="inspectorPagePanel">页面</button><button type="button" id="inspectorNotesTab" role="tab" data-inspector-tab="notes" aria-selected="false" aria-controls="inspectorNotesPanel">标题与备注</button><button type="button" id="inspectorReferencesTab" role="tab" data-inspector-tab="references" aria-selected="false" aria-controls="inspectorReferencesPanel">引用</button></div><section id="inspectorPagePanel" class="inspector-tab-panel inspector-page-panel" data-inspector-panel="page" role="tabpanel" aria-labelledby="inspectorPageTab"><div id="elementInspector"></div></section><section id="inspectorNotesPanel" class="inspector-tab-panel inspector-notes-panel" data-inspector-panel="notes" role="tabpanel" aria-labelledby="inspectorNotesTab" hidden><div class="visual-notes-field"><div class="inspector-field-heading"><label for="visualPageTitle">页面标题</label><button type="button" id="visualPageCount" aria-label="当前页面"></button></div><input id="visualPageTitle" aria-label="页面标题" maxlength="200" placeholder="输入页面标题" spellcheck="false"><label for="visualPageNotes">页面备注</label><textarea id="visualPageNotes" aria-label="页面备注" placeholder="添加当前页的演讲备注…"></textarea></div></section><section id="inspectorReferencesPanel" class="inspector-tab-panel inspector-references-panel" data-inspector-panel="references" role="tabpanel" aria-labelledby="inspectorReferencesTab" hidden><section class="visual-page-refs" id="visualPageRefs" aria-label="当前页引用"><header><h2>当前页引用</h2><div><button type="button" class="button subtle reference-library-button" id="openReferenceLibrary">资料库</button><button type="button" class="icon-button" id="addReference" aria-label="添加引用" title="添加引用">${icon("plus")}</button></div></header><div id="referenceList"></div></section></section></aside></div><input id="visualImageFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml" hidden><div id="pageInsertPopover" class="editor-popover page-insert-popover" popover="auto" role="menu" aria-label="新增页面"></div><div id="referenceLibraryPopover" class="editor-popover reference-library-popover" popover="auto" role="dialog" aria-label="引用资料库"></div><div id="shapePopover" class="editor-popover shape-popover" popover="auto" role="dialog" aria-label="插入形状"><div class="shape-grid">${shapes.map((shape) => `<button type="button" data-shape="${shape.id}" aria-label="${shape.label}" title="${shape.label}">${icon(shape.icon)}<span>${shape.label}</span></button>`).join("")}</div></div><div id="linkPopover" class="editor-popover link-popover" popover="auto" role="dialog" aria-label="超链接"><form id="editorLinkForm"><div class="link-popover-heading"><h2>超链接</h2>${tool("closeLink", "x", "关闭链接设置")}</div><label>链接地址<input id="editorLinkURL" placeholder="https://" autocomplete="off" spellcheck="false" aria-label="链接地址"></label><p id="editorLinkError" class="form-error" role="alert"></p><div class="link-popover-actions"><button type="button" class="button subtle" id="removeEditorLink">移除链接</button><button type="submit" class="button primary">应用</button></div></form></div>`;
+  root.innerHTML = `<div class="visual-toolbar"><div class="visual-tool-group">${tool("visualUndo", "undo", "撤销")}${tool("visualRedo", "redo", "重做")}</div><div class="visual-tool-group"><button class="button subtle" id="insertPage" aria-haspopup="menu" aria-expanded="false">${icon("plus")}新增页面${icon("down")}</button></div><div class="visual-tool-group"><button class="button subtle" id="insertText">${icon("type")}文字</button><button class="button subtle" id="insertImage">${icon("image")}图片</button><button class="button subtle" id="insertShape" aria-haspopup="dialog" aria-expanded="false">${icon("square")}形状${icon("down")}</button><button class="button subtle" id="insertFormula">${icon("sigma")}公式</button><button class="button subtle" id="insertLink" disabled>${icon("link")}链接</button></div><div class="visual-toolbar-end">${tool("snapToggle", "magnet", "对齐辅助线（按住 Alt 暂停吸附）")}</div></div><div class="visual-layout"><aside class="slide-rail"><div id="slideList" class="slide-list" aria-label="幻灯片页面"></div></aside><div class="visual-center"><div class="visual-stage"><iframe id="visualCanvas" title="可视化编辑画布" sandbox="allow-same-origin"></iframe></div></div><aside class="visual-inspector"><div class="inspector-tabs" role="tablist" aria-label="页面侧边栏"><button type="button" id="inspectorPageTab" role="tab" data-inspector-tab="page" aria-selected="true" aria-controls="inspectorPagePanel">页面</button><button type="button" id="inspectorNotesTab" role="tab" data-inspector-tab="notes" aria-selected="false" aria-controls="inspectorNotesPanel">标题与备注</button><button type="button" id="inspectorReferencesTab" role="tab" data-inspector-tab="references" aria-selected="false" aria-controls="inspectorReferencesPanel">引用</button></div><section id="inspectorPagePanel" class="inspector-tab-panel inspector-page-panel" data-inspector-panel="page" role="tabpanel" aria-labelledby="inspectorPageTab"><div id="elementInspector"></div></section><section id="inspectorNotesPanel" class="inspector-tab-panel inspector-notes-panel" data-inspector-panel="notes" role="tabpanel" aria-labelledby="inspectorNotesTab" hidden><div class="visual-notes-field"><div class="inspector-field-heading"><label for="visualPageTitle">页面标题</label><button type="button" id="visualPageCount" aria-label="当前页面"></button></div><input id="visualPageTitle" aria-label="页面标题" maxlength="200" placeholder="输入页面标题" spellcheck="false"><label for="visualPageNotes">页面备注</label><textarea id="visualPageNotes" aria-label="页面备注" placeholder="添加当前页的演讲备注…"></textarea></div></section><section id="inspectorReferencesPanel" class="inspector-tab-panel inspector-references-panel" data-inspector-panel="references" role="tabpanel" aria-labelledby="inspectorReferencesTab" hidden><section class="visual-page-refs" id="visualPageRefs" aria-label="当前页引用"><header><h2>当前页引用</h2><div><button type="button" class="button subtle reference-library-button" id="openReferenceLibrary">资料库</button><button type="button" class="icon-button" id="addReference" aria-label="添加引用" title="添加引用">${icon("plus")}</button></div></header><div id="referenceList"></div></section></section></aside></div><input id="visualImageFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml" hidden><div id="pageInsertPopover" class="editor-popover page-insert-popover" popover="auto" role="menu" aria-label="新增页面"></div><div id="referenceLibraryPopover" class="editor-popover reference-library-popover" popover="auto" role="dialog" aria-label="引用资料库"></div><div id="shapePopover" class="editor-popover shape-popover" popover="auto" role="dialog" aria-label="插入形状"><div class="shape-grid">${shapes.map((shape) => `<button type="button" data-shape="${shape.id}" aria-label="${shape.label}" title="${shape.label}">${icon(shape.icon)}<span>${shape.label}</span></button>`).join("")}</div></div><div id="linkPopover" class="editor-popover link-popover" popover="auto" role="dialog" aria-label="超链接"><form id="editorLinkForm"><div class="link-popover-heading"><h2>超链接</h2>${tool("closeLink", "x", "关闭链接设置")}</div><label>链接地址<input id="editorLinkURL" placeholder="https://" autocomplete="off" spellcheck="false" aria-label="链接地址"></label><p id="editorLinkError" class="form-error" role="alert"></p><div class="link-popover-actions"><button type="button" class="button subtle" id="removeEditorLink">移除链接</button><button type="submit" class="button primary">应用</button></div></form></div>`;
   if (loadingOverlay) root.append(loadingOverlay);
   const $ = (selector) => root.querySelector(selector);
   $("#inspectorPageTab").insertAdjacentHTML(
@@ -263,6 +263,33 @@ export async function mountVisualEditor({
     panel.style.top =
       Math.max(8, Math.min(rect.bottom + 7, innerHeight - box.height - 8)) +
       "px";
+  }
+  function bindPopoverToggle(trigger, panel, beforeOpen) {
+    let openAtActivationStart = false;
+    const rememberState = () => {
+      openAtActivationStart = panel.matches(":popover-open");
+    };
+    trigger.addEventListener("pointerdown", rememberState);
+    trigger.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") rememberState();
+    });
+    trigger.addEventListener("click", () => {
+      const shouldClose =
+        openAtActivationStart || panel.matches(":popover-open");
+      openAtActivationStart = false;
+      if (shouldClose) {
+        if (panel.matches(":popover-open")) panel.hidePopover();
+        return;
+      }
+      beforeOpen?.();
+      openPopover(panel, trigger);
+    });
+    panel.addEventListener("toggle", () =>
+      trigger.setAttribute(
+        "aria-expanded",
+        String(panel.matches(":popover-open")),
+      ),
+    );
   }
   function renderPageInsertMenu() {
     $("#pageInsertPopover").innerHTML =
@@ -715,26 +742,10 @@ export async function mountVisualEditor({
   $("#visualUndo").onclick = () => canvas.undo();
   $("#visualRedo").onclick = () => canvas.redo();
   renderPageInsertMenu();
-  let insertMenuOpenOnPointerDown = false;
-  $("#insertPage").onpointerdown = () => {
-    insertMenuOpenOnPointerDown =
-      $("#pageInsertPopover").matches(":popover-open");
-  };
-  $("#insertPage").onclick = () => {
-    const panel = $("#pageInsertPopover");
-    if (insertMenuOpenOnPointerDown && panel.matches(":popover-open"))
-      panel.hidePopover();
-    else {
-      renderPageInsertMenu();
-      openPopover(panel, $("#insertPage"));
-    }
-    insertMenuOpenOnPointerDown = false;
-  };
-  $("#pageInsertPopover").addEventListener("toggle", () =>
-    $("#insertPage").setAttribute(
-      "aria-expanded",
-      String($("#pageInsertPopover").matches(":popover-open")),
-    ),
+  bindPopoverToggle(
+    $("#insertPage"),
+    $("#pageInsertPopover"),
+    renderPageInsertMenu,
   );
   $("#pageInsertPopover").onclick = async (event) => {
     const button = event.target.closest("button");
@@ -771,8 +782,7 @@ export async function mountVisualEditor({
     formula.open("", true);
   };
   $("#insertText").onclick = () => canvas.insert("text");
-  $("#insertShape").onclick = () =>
-    openPopover($("#shapePopover"), $("#insertShape"));
+  bindPopoverToggle($("#insertShape"), $("#shapePopover"));
   $("#shapePopover").onclick = (event) => {
     const button = event.target.closest("[data-shape]");
     if (button) {
