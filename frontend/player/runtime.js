@@ -1261,17 +1261,35 @@ export function mountPresenter({
   function roomSend(message) {
     if (roomSocket?.readyState === 1) roomSocket.send(JSON.stringify(message));
   }
+  function roomTabCount(id) {
+    if (id === "members") return roomSession?.connections?.length || 0;
+    if (id === "polls")
+      return audienceSession?.polls?.length || (audienceSession?.poll ? 1 : 0);
+    if (id === "comments")
+      return (
+        audienceSession?.questions?.length ||
+        audienceSession?.questionCount ||
+        0
+      );
+    return null;
+  }
+  function updateRoomTabBadges() {
+    ["members", "polls", "comments"].forEach((id) => {
+      const badge = document.querySelector(
+        `[data-room-tab="${id}"] .room-tab-badge`,
+      );
+      if (badge) badge.textContent = roomTabCount(id);
+    });
+  }
   function updateRoomConnections(connections = []) {
     const list = $("roomDeviceList"),
       count = $("roomDeviceCount"),
-      badge = document.querySelector(
-        '[data-room-tab="members"] .room-tab-badge',
-      ),
       navCount = $("roomNavCount");
+    if (roomSession) roomSession.connections = connections;
     if (list) list.innerHTML = connectionsMarkup(connections);
     if (count) count.textContent = `${connections.length} 人在线`;
-    if (badge) badge.textContent = connections.length;
     if (navCount) navCount.textContent = connections.length;
+    updateRoomTabBadges();
     updateRoomPresence(connections.length, roomLatency);
   }
   function updateRoomPresence(count, latency = null) {
@@ -1374,6 +1392,7 @@ export function mountPresenter({
             poll: audienceSession.poll,
             comments: audienceSession.questions,
           });
+          updateRoomTabBadges();
         } else {
           const comment = await roomAudienceRequest("/questions", {
             method: "POST",
@@ -1665,7 +1684,7 @@ export function mountPresenter({
             })
             .join("")}</div></section>`
         : '<section class="audience-live-poll empty-poll"><h3>投票历史</h3><p>发布的投票会独立保存在这里。</p></section>';
-    return `<div class="room-poll-layout"><form id="roomPollForm" class="audience-poll-form"><div class="poll-heading"><div><h3>发起新投票</h3><p>可同时发布多个投票，每个投票单独统计</p></div><span class="session-status">新投票</span></div><label>投票题目<input name="question" maxlength="200" placeholder="输入一个简短问题" required></label><div class="poll-option-fields"><label>选项 1<input name="option" maxlength="100" placeholder="输入选项" required></label><label>选项 2<input name="option" maxlength="100" placeholder="输入选项" required></label></div><button type="button" class="add-poll-option">${ico("plus")}添加选项</button><div class="poll-actions"><button class="session-primary" type="submit">发布投票</button></div></form>${history}</div>`;
+    return `<div class="room-poll-layout"><form id="roomPollForm" class="audience-poll-form"><div class="poll-heading room-poll-create-heading"><h3>发起投票</h3></div><label>投票题目<input name="question" maxlength="200" placeholder="输入一个简短问题" required></label><div class="poll-option-fields"><label>选项 1<input name="option" maxlength="100" placeholder="输入选项" required></label><label>选项 2<input name="option" maxlength="100" placeholder="输入选项" required></label></div><button type="button" class="add-poll-option">${ico("plus")}添加选项</button><div class="poll-actions"><button class="session-primary" type="submit">发布投票</button></div></form>${history}</div>`;
   }
   function roomCommentsMarkup() {
     const comments = audienceSession?.questions || [];
@@ -1699,10 +1718,11 @@ export function mountPresenter({
   function renderRoomTab() {
     const panel = $("roomTabPanel");
     if (!panel || !roomSession) return;
+    updateRoomTabBadges();
     if (roomTab === "settings")
-      panel.innerHTML = `<div class="room-settings-layout"><section class="room-settings-card room-share-card"><header class="room-card-heading"><div><span>邀请观众</span><h3>分享房间</h3><p>扫码或复制链接即可加入当前演示。</p></div><em class="room-status-chip"><i></i>正在同步</em></header><div class="room-share-content"><div class="session-qr"><button type="button" class="session-qr-frame" aria-label="放大房间二维码"><img src="${escapeHTML(roomSession.qr)}" alt="房间二维码"></button><span>${ico("audience")}扫码加入房间</span></div><div class="room-share-details"><label>房间链接</label><div class="session-link"><input value="${escapeHTML(roomSession.url)}" readonly><button type="button" data-copy-room>${ico("check")}复制</button></div></div></div></section><section class="room-settings-card room-permissions-card"><header class="room-card-heading"><div><span>访问控制</span><h3>观众权限</h3></div></header><div class="room-permission-grid">${roomPermissionRows.map(([key, label, description, icon]) => `<label><span class="room-permission-icon">${ico(icon)}</span><span><b>${escapeHTML(label)}</b><small>${escapeHTML(description)}</small></span><input type="checkbox" data-room-permission="${key}" ${roomSession.permissions[key] ? "checked" : ""}><i aria-hidden="true"></i></label>`).join("")}</div></section><section class="room-settings-card room-password-control"><div class="room-card-heading"><div><span>访问安全</span><h3>房间密码</h3></div></div><div class="room-password-form"><input type="password" data-room-password maxlength="128" placeholder="${roomSession.passwordProtected ? "输入新密码，留空可移除" : "可选：设置访问密码"}"><button type="button" data-room-password-save>保存密码</button></div></section><section class="room-danger-zone"><div><h3>结束房间</h3><p>所有参与者将断开连接，本次房间无法继续访问。</p></div><button type="button" data-room-end>结束房间</button></section></div>`;
+      panel.innerHTML = `<div class="room-settings-layout"><section class="room-settings-card room-share-card"><header class="room-card-heading"><div><span>邀请观众</span><h3>分享房间</h3></div><em class="room-status-chip"><i></i>正在同步</em></header><div class="room-share-content"><div class="session-qr"><button type="button" class="session-qr-frame" aria-label="放大房间二维码"><img src="${escapeHTML(roomSession.qr)}" alt="房间二维码"></button></div><div class="room-share-details"><label>房间链接</label><div class="session-link"><input value="${escapeHTML(roomSession.url)}" readonly><button type="button" data-copy-room>${ico("check")}复制链接</button></div></div></div></section><section class="room-settings-card room-permissions-card"><header class="room-card-heading"><div><span>访问控制</span><h3>观众权限</h3></div></header><div class="room-permission-grid">${roomPermissionRows.map(([key, label, description, icon]) => `<label><span class="room-permission-icon">${ico(icon)}</span><span><b>${escapeHTML(label)}</b><small>${escapeHTML(description)}</small></span><input type="checkbox" data-room-permission="${key}" ${roomSession.permissions[key] ? "checked" : ""}><i aria-hidden="true"></i></label>`).join("")}</div></section><section class="room-settings-card room-password-control"><div class="room-card-heading"><div><span>访问安全</span><h3>房间密码</h3></div></div><div class="room-password-form"><input type="password" data-room-password maxlength="128" placeholder="${roomSession.passwordProtected ? "输入新密码，留空可移除" : "可选：设置访问密码"}"><button type="button" data-room-password-save>保存密码</button></div></section><section class="room-danger-zone"><div><h3>结束房间</h3></div><button type="button" data-room-end>结束房间</button></section></div>`;
     else if (roomTab === "members")
-      panel.innerHTML = `<section class="room-tab-section room-members"><header class="room-tab-heading"><div><span>实时成员</span><h3>房间成员</h3><p>正在同步观看演示的参与者与设备。</p></div><em id="roomDeviceCount">${roomSession.connections?.length || 0} 人在线</em></header><div id="roomDeviceList" class="connection-list">${connectionsMarkup(roomSession.connections)}</div></section>`;
+      panel.innerHTML = `<section class="room-tab-section room-members"><header class="room-tab-heading"><div><span>实时成员</span><h3>房间成员</h3></div><em id="roomDeviceCount">${roomSession.connections?.length || 0} 人在线</em></header><div id="roomDeviceList" class="connection-list">${connectionsMarkup(roomSession.connections)}</div></section>`;
     else if (roomTab === "polls") panel.innerHTML = roomPollMarkup();
     else panel.innerHTML = roomCommentsMarkup();
 
@@ -1874,7 +1894,14 @@ export function mountPresenter({
     panel?.classList.remove("room-setup-mode");
     panel?.classList.add("room-dashboard-mode");
     body.className = "room-dashboard";
-    body.innerHTML = `<div class="room-dashboard-shell"><aside class="room-dashboard-nav"><div class="room-live-summary"><span><i></i>房间进行中</span><strong><b id="roomNavCount">${roomSession.connections?.length || 0}</b> 人在线</strong><small>页面、光标与批注正在同步</small></div><nav class="room-tabs" role="tablist" aria-label="房间管理">${roomTabs.map(([id, label, icon]) => `<button type="button" role="tab" data-room-tab="${id}" aria-selected="${roomTab === id}"><span class="room-tab-icon">${ico(icon)}</span><span class="room-tab-label">${escapeHTML(label)}</span>${id === "members" ? `<em class="room-tab-badge">${roomSession.connections?.length || 0}</em>` : ""}</button>`).join("")}</nav></aside><div id="roomTabPanel" class="room-tab-panel" role="tabpanel"></div></div>`;
+    body.innerHTML = `<div class="room-dashboard-shell"><aside class="room-dashboard-nav"><div class="room-live-summary"><span><i></i>房间进行中</span><strong><b id="roomNavCount">${roomSession.connections?.length || 0}</b> 人在线</strong></div><nav class="room-tabs" role="tablist" aria-label="房间管理">${roomTabs
+      .map(([id, label, icon]) => {
+        const count = roomTabCount(id);
+        return `<button type="button" role="tab" data-room-tab="${id}" aria-selected="${roomTab === id}"><span class="room-tab-icon">${ico(icon)}</span><span class="room-tab-label">${escapeHTML(label)}</span>${count === null ? "" : `<em class="room-tab-badge">${count}</em>`}</button>`;
+      })
+      .join(
+        "",
+      )}</nav></aside><div id="roomTabPanel" class="room-tab-panel" role="tabpanel"></div></div>`;
     body.querySelectorAll("[data-room-tab]").forEach(
       (button) =>
         (button.onclick = () => {
@@ -2109,6 +2136,7 @@ export function mountPresenter({
         );
         next.qr = audienceSession.qr;
         audienceSession = next;
+        updateRoomTabBadges();
         if (roomSession)
           renderLiveFeed({
             poll: next.poll,

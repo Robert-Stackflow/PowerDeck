@@ -3624,6 +3624,12 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   min-width: 0;
   margin: 0;
 }
+.room-poll-create-heading h3,
+.audience-poll-form .room-poll-create-heading h3 {
+  color: #18362c;
+  font-size: 20px;
+  line-height: 1.25;
+}
 .room-poll-history {
   min-height: 0;
   display: flex;
@@ -4228,11 +4234,16 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   font-size: 10px;
 }
 .room-share-details .session-link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   margin-top: 7px;
 }
 .room-share-details .session-link input {
   min-width: 0;
+  width: 100%;
+}
+.room-share-details .session-link button {
   width: 100%;
 }
 .room-sync-note {
@@ -5504,10 +5515,11 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   margin-top: 14px;
 }
 .room-members .connection-list .connection-item {
-  min-height: 84px;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-  gap: 13px;
-  padding: 12px 14px;
+  box-sizing: border-box;
+  min-height: 0;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px 12px;
   border: 1px solid #dfe7e2;
   border-radius: 14px;
   background: linear-gradient(180deg, #fff 0%, #fafcfb 100%);
@@ -5517,9 +5529,9 @@ body[data-tool="pointer"] #stage [data-editor-href] {
   border-top: 1px solid #dfe7e2;
 }
 .room-members .connection-device-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
   background: #e8f2ed;
   color: #39785e;
 }
@@ -5530,13 +5542,13 @@ body[data-tool="pointer"] #stage [data-editor-href] {
 
 @media (max-width: 600px) {
   .room-members .connection-list .connection-item {
-    grid-template-columns: 38px minmax(0, 1fr);
-    min-height: 80px;
-    padding: 11px;
+    grid-template-columns: 36px minmax(0, 1fr);
+    min-height: 0;
+    padding: 9px 10px;
   }
   .room-members .connection-device-icon {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
   }
   .room-members .connection-item > time {
     grid-column: 2;
