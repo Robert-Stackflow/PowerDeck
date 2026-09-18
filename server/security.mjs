@@ -136,7 +136,7 @@ export function createSecurity({
         challenge: remember("login", req, { userId: user?.id }),
       };
     resetLimit(req);
-    return issue(res, user);
+    return issue(req, res, user);
   }
   function relyingParty(req) {
     const u = new URL(origin || `http://${req.headers.host}`);
@@ -187,7 +187,7 @@ export function createSecurity({
       verifyFactor(data.code);
       pending.delete(data.challenge);
       resetLimit(req);
-      return issue(res, userById(pendingLogin.userId) || undefined);
+      return issue(req, res, userById(pendingLogin.userId) || undefined);
     },
     async setupTotp(req, data) {
       if (state().secret) throw new HttpError(409, "双因素验证已启用");

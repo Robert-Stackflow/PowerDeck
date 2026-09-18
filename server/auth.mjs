@@ -36,6 +36,18 @@ export function createAuth(
     db.exec("ALTER TABLE sessions ADD COLUMN user_id TEXT");
   if (!sessionColumns.some((column) => column.name === "role"))
     db.exec("ALTER TABLE sessions ADD COLUMN role TEXT");
+  if (!sessionColumns.some((column) => column.name === "created_at"))
+    db.exec("ALTER TABLE sessions ADD COLUMN created_at INTEGER");
+  if (!sessionColumns.some((column) => column.name === "last_seen_at"))
+    db.exec("ALTER TABLE sessions ADD COLUMN last_seen_at INTEGER");
+  if (!sessionColumns.some((column) => column.name === "ip"))
+    db.exec("ALTER TABLE sessions ADD COLUMN ip TEXT");
+  if (!sessionColumns.some((column) => column.name === "user_agent"))
+    db.exec("ALTER TABLE sessions ADD COLUMN user_agent TEXT");
+  db.exec(`UPDATE sessions SET
+    created_at=COALESCE(created_at,expires-604800000),
+    last_seen_at=COALESCE(last_seen_at,created_at,expires-604800000),
+    ip=COALESCE(ip,''),user_agent=COALESCE(user_agent,'')`);
   const admin = () => db.prepare("SELECT * FROM admin WHERE id=1").get();
   const syncOwner = () => {
     const legacy = admin();
@@ -95,6 +107,13 @@ export function createAuth(
     bucket.count++;
     attempts.set(ip, bucket);
   }
+  const requestIP = (req) =>
+    String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "")
+      .split(",")[0]
+      .trim()
+      .slice(0, 80);
+  const requestAgent = (req) =>
+    String(req.headers["user-agent"] || "").slice(0, 500);
   const session = (req) => {
     const raw = (req.headers.cookie || "")
       .split(";")
@@ -106,18 +125,37 @@ export function createAuth(
       .prepare("SELECT * FROM sessions WHERE hash=? AND expires>?")
       .get(hash(raw), Date.now());
     if (!value) return null;
+    if (!value.last_seen_at || value.last_seen_at < Date.now() - 60000) {
+      value.last_seen_at = Date.now();
+      value.ip = requestIP(req);
+      value.user_agent = requestAgent(req);
+      db.prepare(
+        "UPDATE sessions SET last_seen_at=?,ip=?,user_agent=? WHERE hash=?",
+      ).run(value.last_seen_at, value.ip, value.user_agent, value.hash);
+    }
     const user = userById(value.user_id) || (value.user_id ? null : owner());
     return user ? { ...value, user } : null;
   };
-  function issue(res, selected = owner()) {
+  function issue(req, res, selected = owner()) {
     requireValue(selected && !selected.disabled_at, "账号不可用");
     const value = token(),
       csrf = token(),
-      expires = Date.now() + 7 * 86400000;
-    db.prepare("DELETE FROM sessions WHERE expires<=?").run(Date.now());
+      now = Date.now(),
+      expires = now + 7 * 86400000;
+    db.prepare("DELETE FROM sessions WHERE expires<=?").run(now);
     db.prepare(
-      "INSERT INTO sessions(hash,csrf,expires,user_id,role) VALUES(?,?,?,?,?)",
-    ).run(hash(value), csrf, expires, selected.id, selected.role);
+      "INSERT INTO sessions(hash,csrf,expires,user_id,role,created_at,last_seen_at,ip,user_agent) VALUES(?,?,?,?,?,?,?,?,?)",
+    ).run(
+      hash(value),
+      csrf,
+      expires,
+      selected.id,
+      selected.role,
+      now,
+      now,
+      requestIP(req),
+      requestAgent(req),
+    );
     res.setHeader(
       "Set-Cookie",
       `deck_session=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${secure ? "; Secure" : ""}`,
@@ -223,7 +261,7 @@ export function createAuth(
       const encoded = await passwordHash(data.password);
       if (admin()) throw new HttpError(409, "管理员已设置");
       db.prepare("INSERT INTO admin VALUES(1,?,?)").run(data.username, encoded);
-      return issue(res, syncOwner());
+      return issue(req, res, syncOwner());
     },
     login: async (req, res, data) => {
       limit(req.socket.remoteAddress);
@@ -245,7 +283,7 @@ export function createAuth(
         throw new HttpError(401, "账号或密码不正确");
       if (selected.role === "owner") return security.finish(req, res, selected);
       resetLimit(req);
-      return issue(res, selected);
+      return issue(req, res, selected);
     },
     logout: (req, res) => {
       const value = session(req);
@@ -272,7 +310,7 @@ export function createAuth(
         db.prepare("UPDATE admin SET password=? WHERE id=1").run(encoded);
       db.prepare("DELETE FROM sessions WHERE user_id=?").run(selected.id);
       security.clearPending();
-      return issue(res, userById(selected.id));
+      return issue(req, res, userById(selected.id));
     },
     users() {
       syncOwner();
@@ -282,6 +320,43 @@ export function createAuth(
         )
         .all()
         .map(userDTO);
+    },
+    sessions(req) {
+      const current = requireSession(req);
+      db.prepare("DELETE FROM sessions WHERE expires<=?").run(Date.now());
+      return db
+        .prepare(
+          "SELECT * FROM sessions WHERE user_id=? ORDER BY last_seen_at DESC,created_at DESC",
+        )
+        .all(current.user.id)
+        .map((row) => ({
+          id: hash(row.hash).slice(0, 24),
+          current: row.hash === current.hash,
+          ip: row.ip || "",
+          userAgent: row.user_agent || "",
+          createdAt: row.created_at,
+          lastSeenAt: row.last_seen_at,
+          expiresAt: row.expires,
+        }));
+    },
+    deleteSession(req, id) {
+      const current = requireSession(req),
+        selected = db
+          .prepare("SELECT hash FROM sessions WHERE user_id=?")
+          .all(current.user.id)
+          .find((row) => hash(row.hash).slice(0, 24) === id);
+      if (!selected) throw new HttpError(404, "会话不存在");
+      if (selected.hash === current.hash)
+        throw new HttpError(409, "当前会话请使用退出登录");
+      db.prepare("DELETE FROM sessions WHERE hash=?").run(selected.hash);
+      return { ok: true };
+    },
+    deleteOtherSessions(req) {
+      const current = requireSession(req),
+        result = db
+          .prepare("DELETE FROM sessions WHERE user_id=? AND hash<>?")
+          .run(current.user.id, current.hash);
+      return { ok: true, deleted: Number(result.changes || 0) };
     },
     async createUser(input) {
       credentials(input);
@@ -334,7 +409,8 @@ export function createAuth(
       }
       const accessChanged =
         role !== selected.role || disabledAt !== selected.disabled_at;
-      db.transaction(() => {
+      db.exec("BEGIN IMMEDIATE");
+      try {
         db.prepare(
           "UPDATE workspace_users SET username=?,role=?,disabled_at=?,updated_at=? WHERE id=?",
         ).run(username, role, disabledAt, Date.now(), id);
@@ -342,7 +418,13 @@ export function createAuth(
           db.prepare("UPDATE admin SET username=? WHERE id=1").run(username);
         if (accessChanged)
           db.prepare("DELETE FROM sessions WHERE user_id=?").run(id);
-      })();
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        if (String(error.message).includes("UNIQUE"))
+          throw new HttpError(409, "用户名已存在");
+        throw error;
+      }
       return userDTO(
         db.prepare("SELECT * FROM workspace_users WHERE id=?").get(id),
       );

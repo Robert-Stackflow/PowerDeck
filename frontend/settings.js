@@ -34,6 +34,42 @@ const passkeyList = (passkeys) =>
         .join("")
     : `<div class="passkey-empty">${icon("fingerprint")}<span><b>尚未添加通行密钥</b><small>添加后可使用设备验证快速登录</small></span></div>`;
 
+const sessionDevice = (userAgent) => {
+  const value = String(userAgent || "");
+  if (/iPad/i.test(value)) return ["iPad", "smartphone"];
+  if (/iPhone/i.test(value)) return ["iPhone", "smartphone"];
+  if (/Android/i.test(value)) return ["Android 设备", "smartphone"];
+  if (/Windows/i.test(value)) return ["Windows 设备", "monitor"];
+  if (/Macintosh|Mac OS/i.test(value)) return ["Mac 设备", "monitor"];
+  if (/Linux/i.test(value)) return ["Linux 设备", "monitor"];
+  return ["未知设备", "monitor"];
+};
+const sessionBrowser = (userAgent) => {
+  const value = String(userAgent || "");
+  if (/Edg\//i.test(value)) return "Microsoft Edge";
+  if (/Firefox\//i.test(value)) return "Firefox";
+  if (/CriOS|Chrome\//i.test(value)) return "Chrome";
+  if (/Safari\//i.test(value)) return "Safari";
+  return "浏览器";
+};
+const sessionTime = (value) =>
+  value
+    ? new Date(value).toLocaleString("zh-CN", {
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "未知";
+const sessionList = (sessions) =>
+  sessions
+    .map((item) => {
+      const [device, glyph] = sessionDevice(item.userAgent),
+        browser = sessionBrowser(item.userAgent);
+      return `<article class="login-session${item.current ? " current" : ""}"><span class="login-session-icon">${icon(glyph)}</span><div class="login-session-copy"><header><b>${esc(device)}</b>${item.current ? "<em>当前会话</em>" : ""}</header><p>${esc(browser)}${item.ip ? ` · ${esc(item.ip)}` : ""}</p><small>最近活动 ${sessionTime(item.lastSeenAt)} · 登录于 ${sessionTime(item.createdAt)}</small></div>${item.current ? "" : `<button type="button" class="button subtle" data-revoke-session="${esc(item.id)}">退出会话</button>`}</article>`;
+    })
+    .join("");
+
 let activeTab = sessionStorage.getItem("settingsTab") || "general";
 export async function openSettings() {
   const main = document.querySelector("main.library");
@@ -43,10 +79,17 @@ export async function openSettings() {
     ["brand", "team", "backup"].includes(activeTab)
   )
     activeTab = "general";
-  let security =
+  let [security, sessionResult] = await Promise.all([
       session.role === "owner"
-        ? await api("/security")
-        : { passkeys: [], totpEnabled: false, recoveryRemaining: 0 },
+        ? api("/security")
+        : Promise.resolve({
+            passkeys: [],
+            totpEnabled: false,
+            recoveryRemaining: 0,
+          }),
+      api("/sessions"),
+    ]),
+    loginSessions = sessionResult.sessions || [],
     favicon = site.favicon;
   // A category click while the request is in flight must keep its own view.
   if (
@@ -63,7 +106,7 @@ export async function openSettings() {
   account.setAttribute("aria-current", "page");
   document.title = "设置 · " + site.name;
   main.className = "library settings-view";
-  main.innerHTML = `<header class="library-header"><h1>设置</h1></header><div class="settings-layout"><aside class="settings-nav settings-card"><nav aria-label="设置分类"><button class="nav-item ${tab === "general" ? "active" : ""}" data-settings-tab="general" aria-pressed="${tab === "general"}">${icon("settings2")}基础设置</button><button class="nav-item ${tab === "security" ? "active" : ""}" data-settings-tab="security" aria-pressed="${tab === "security"}">${icon("shieldCheck")}安全设置</button>${platformSettingsNav(tab)}</nav></aside><div class="settings-content"><section id="generalSettings" data-settings-panel="general" ${tab !== "general" ? "hidden" : ""}><form id="siteForm" class="settings-card"><div class="settings-card-heading">${icon("globe")}<h2>网站信息</h2></div><div class="icon-setting"><img id="siteIconPreview" src="${esc(favicon || defaultIcon)}" alt="网站图标"><div><label class="button" for="siteIconFile">${icon("upload")}上传图标</label><input type="file" id="siteIconFile" accept="image/*" hidden><button type="button" id="resetSiteIcon" class="button subtle">恢复默认</button></div></div><label>网站名称<input name="name" value="${esc(site.name)}" maxlength="40" required></label><fieldset class="theme-setting"><legend>外观</legend><div class="theme-options">${[
+  main.innerHTML = `<header class="library-header"><h1>设置</h1></header><div class="settings-layout"><aside class="settings-nav settings-card"><nav aria-label="设置分类"><button class="nav-item ${tab === "sessions" ? "active" : ""}" data-settings-tab="sessions" aria-pressed="${tab === "sessions"}">${icon("monitor")}会话列表</button><button class="nav-item ${tab === "general" ? "active" : ""}" data-settings-tab="general" aria-pressed="${tab === "general"}">${icon("settings2")}基础设置</button><button class="nav-item ${tab === "security" ? "active" : ""}" data-settings-tab="security" aria-pressed="${tab === "security"}">${icon("shieldCheck")}安全设置</button>${platformSettingsNav(tab)}</nav></aside><div class="settings-content"><section id="sessionSettings" data-settings-panel="sessions" class="settings-card login-sessions-card" ${tab !== "sessions" ? "hidden" : ""}><div class="login-sessions-heading"><div><h2>登录会话</h2><span>${loginSessions.length} 个设备</span></div><button id="revokeOtherSessions" type="button" class="button subtle" ${loginSessions.length > 1 ? "" : "disabled"}>退出其他会话</button></div><div class="login-session-list">${sessionList(loginSessions)}</div></section><section id="generalSettings" data-settings-panel="general" ${tab !== "general" ? "hidden" : ""}><form id="siteForm" class="settings-card"><div class="settings-card-heading">${icon("globe")}<h2>网站信息</h2></div><div class="icon-setting"><img id="siteIconPreview" src="${esc(favicon || defaultIcon)}" alt="网站图标"><div><label class="button" for="siteIconFile">${icon("upload")}上传图标</label><input type="file" id="siteIconFile" accept="image/*" hidden><button type="button" id="resetSiteIcon" class="button subtle">恢复默认</button></div></div><label>网站名称<input name="name" value="${esc(site.name)}" maxlength="40" required></label><fieldset class="theme-setting"><legend>外观</legend><div class="theme-options">${[
     ["light", "sun", "浅色"],
     ["dark", "moon", "深色"],
     ["system", "monitor", "跟随系统"],
@@ -97,6 +140,37 @@ export async function openSettings() {
     closeDialog,
     toast,
   });
+  main.querySelectorAll("[data-revoke-session]").forEach(
+    (button) =>
+      (button.onclick = () =>
+        showDialog("退出会话", "<p>该设备需要重新登录后才能继续访问。</p>", {
+          submit: "退出会话",
+          danger: true,
+          onSubmit: async () => {
+            await api(`/sessions/${button.dataset.revokeSession}`, {
+              method: "DELETE",
+            });
+            closeDialog();
+            await openSettings();
+            toast("会话已退出");
+          },
+        })),
+  );
+  main.querySelector("#revokeOtherSessions").onclick = () =>
+    showDialog(
+      "退出其他会话",
+      "<p>除当前设备外，其他设备都需要重新登录。</p>",
+      {
+        submit: "全部退出",
+        danger: true,
+        onSubmit: async () => {
+          await api("/sessions/others", { method: "DELETE" });
+          closeDialog();
+          await openSettings();
+          toast("其他会话已退出");
+        },
+      },
+    );
   if (session.role !== "owner") {
     main
       .querySelectorAll(".owner-security")

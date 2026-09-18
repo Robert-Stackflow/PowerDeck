@@ -139,10 +139,7 @@ export async function mountPlatformSettings(
               if (updated.id === session.userId) {
                 session.username = updated.username;
                 const account = document.querySelector("#accountSettings"),
-                  avatar = account?.querySelector(".avatar"),
-                  name = account?.querySelector("span:last-child");
-                if (avatar)
-                  avatar.textContent = updated.username[0].toUpperCase();
+                  name = account?.querySelector(".account-copy");
                 if (name?.firstChild)
                   name.firstChild.nodeValue = updated.username;
               }

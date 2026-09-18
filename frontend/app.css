@@ -253,7 +253,7 @@ p {
 .account-name {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0;
   flex: 1;
   min-width: 0;
   border: 0;
@@ -269,11 +269,14 @@ p {
 .account-name:hover {
   background: var(--hover);
 }
-.account-name > span:not(.avatar) {
+.account-copy {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.account-settings-icon {
+  display: none;
 }
 .account > .icon-button {
   flex: none;
@@ -1642,17 +1645,21 @@ dialog.wide {
     width: 27px;
     height: 28px;
   }
-  .account-name > span:not(.avatar) {
+  .account-copy {
     display: none;
   }
   .account-name {
     padding: 5px;
     flex: none;
   }
-  .account-name .avatar {
+  .account-settings-icon {
+    display: grid;
+    place-items: center;
     width: 29px;
     height: 29px;
-    font-size: 11px;
+  }
+  .account-settings-icon svg {
+    width: 17px;
   }
   .account > .icon-button {
     width: 27px;
