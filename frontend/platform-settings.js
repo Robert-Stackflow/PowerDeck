@@ -1,6 +1,11 @@
 import { api, esc, fileBase64, session } from "./api.js";
 import { icon } from "./icons.js";
 import { selectMarkup, enhanceSelects } from "./components/select.js";
+import {
+  colorField,
+  createColorPicker,
+  setColorField,
+} from "./editor/controls.js";
 
 const roles = {
   owner: "所有者",
@@ -43,7 +48,24 @@ export async function mountPlatformSettings(
       api("/brand-kit"),
       api("/brand-assets"),
     ]);
-    brandPanel.innerHTML = `<form id="brandKitForm" class="settings-card"><div class="settings-card-heading">${icon("image")}<div><h2>品牌规范</h2><p>编辑器素材库会使用这里保存的品牌资源。</p></div></div><div class="brand-kit-fields"><label>主品牌色<input type="color" name="primary" value="${esc(kit.primary)}"></label><label>辅助色<input type="color" name="secondary" value="${esc(kit.secondary)}"></label><label>品牌字体<input name="font" value="${esc(kit.font)}" maxlength="80" placeholder="例如：Inter, 思源黑体"></label></div><div class="settings-card-footer"><button class="button primary" type="submit">保存品牌规范</button></div></form><section class="settings-card brand-assets-card"><div class="settings-card-heading">${icon("library")}<div><h2>品牌素材库</h2><p>Logo、图标与常用图片可直接从编辑器插入。</p></div><label class="button primary" for="brandAssetFile">${icon("upload")}上传素材</label><input id="brandAssetFile" type="file" accept="image/*,.svg" multiple hidden></div><div class="brand-settings-grid">${assetResult.assets.length ? assetResult.assets.map((asset) => `<article><img src="/api/brand-assets/${asset.id}/file" alt=""><div><b title="${esc(asset.name)}">${esc(asset.name)}</b><small>${formatSize(asset.size)}</small></div><button type="button" class="icon-button danger" data-delete-brand="${asset.id}" aria-label="删除素材">${icon("trash2")}</button></article>`).join("") : '<p class="settings-empty">尚未上传品牌素材</p>'}</div></section>`;
+    brandPanel.innerHTML = `<form id="brandKitForm" class="settings-card"><div class="settings-card-heading">${icon("image")}<div><h2>品牌规范</h2><p>编辑器素材库会使用这里保存的品牌资源。</p></div></div><div class="brand-kit-fields">${colorField("primary", "主品牌色")}${colorField("secondary", "辅助色")}<label>品牌字体<input name="font" value="${esc(kit.font)}" maxlength="80" placeholder="例如：Inter, 思源黑体"></label></div><div class="settings-card-footer"><button class="button primary" type="submit">保存品牌规范</button></div></form><section class="settings-card brand-assets-card"><div class="settings-card-heading">${icon("library")}<div><h2>品牌素材库</h2><p>Logo、图标与常用图片可直接从编辑器插入。</p></div><label class="button primary" for="brandAssetFile">${icon("upload")}上传素材</label><input id="brandAssetFile" type="file" accept="image/*,.svg" multiple hidden></div><div class="brand-settings-grid">${assetResult.assets.length ? assetResult.assets.map((asset) => `<article><img src="/api/brand-assets/${asset.id}/file" alt=""><div><b title="${esc(asset.name)}">${esc(asset.name)}</b><small>${formatSize(asset.size)}</small></div><button type="button" class="icon-button danger" data-delete-brand="${asset.id}" aria-label="删除素材">${icon("trash2")}</button></article>`).join("") : '<p class="settings-empty">尚未上传品牌素材</p>'}</div></section>`;
+    const colorPicker = createColorPicker(brandPanel, toast);
+    brandPanel.querySelector("[data-transparent]").hidden = true;
+    for (const [name, value] of [
+      ["primary", kit.primary],
+      ["secondary", kit.secondary],
+    ]) {
+      setColorField(brandPanel, name, value);
+      const button = brandPanel.querySelector(`[data-color-field="${name}"]`);
+      button.onclick = () =>
+        colorPicker.open(
+          button,
+          brandPanel.querySelector(`[name="${name}"]`).value,
+          (color) => {
+            if (color !== "transparent") setColorField(brandPanel, name, color);
+          },
+        );
+    }
     brandPanel.querySelector("#brandKitForm").onsubmit = async (event) => {
       event.preventDefault();
       await api("/brand-kit", {

@@ -418,9 +418,9 @@
   gap: 14px;
   padding: 22px;
 }
-.brand-kit-fields input[type="color"] {
+.brand-kit-fields .color-control {
   height: 42px;
-  padding: 4px;
+  font-size: 11px;
 }
 .brand-assets-card {
   margin-top: 16px;
