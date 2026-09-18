@@ -215,55 +215,40 @@ p {
   gap: 8px;
 }
 .sidebar-theme {
-  width: 100%;
+  align-self: center;
   margin-top: auto;
-  min-height: 52px;
-  padding: 8px 10px;
+  padding: 3px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 2px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 11px;
   background: var(--soft);
-  color: var(--secondary);
-  text-align: left;
-  transition:
-    background 0.16s,
-    border-color 0.16s,
-    color 0.16s;
 }
-.sidebar-theme:hover {
-  background: var(--hover);
-  border-color: var(--border-hover);
-  color: var(--ink);
-}
-.sidebar-theme-icon {
+.sidebar-theme button {
   width: 32px;
-  height: 32px;
+  height: 30px;
   display: grid;
   place-items: center;
-  flex: none;
-  border-radius: 10px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  color: var(--accent-ink);
-}
-.sidebar-theme-icon svg {
-  width: 17px;
-  height: 17px;
-}
-.sidebar-theme-copy {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-.sidebar-theme-copy b {
-  font-size: 12px;
-  font-weight: 600;
-}
-.sidebar-theme-copy small {
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: var(--muted);
-  font-size: 9px;
+  transition: 0.15s ease;
+}
+.sidebar-theme button:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+.sidebar-theme button[aria-selected="true"] {
+  color: var(--accent-ink);
+  background: var(--paper);
+  box-shadow: 0 1px 4px #183d2d17;
+}
+.sidebar-theme svg {
+  width: 16px;
+  height: 16px;
 }
 .account-name {
   display: flex;
@@ -1497,20 +1482,17 @@ dialog.wide {
   .sidebar-theme {
     position: absolute;
     top: 17px;
-    right: 100px;
-    width: 39px;
-    min-height: 39px;
+    right: 92px;
+    width: auto;
+    min-height: 36px;
     margin: 0;
     padding: 3px;
-    border: 0;
-    background: transparent;
+    border: 1px solid var(--line);
+    background: var(--soft);
   }
-  .sidebar-theme-icon {
-    width: 33px;
-    height: 33px;
-  }
-  .sidebar-theme-copy {
-    display: none;
+  .sidebar-theme button {
+    width: 27px;
+    height: 28px;
   }
   .account-name > span:not(.avatar) {
     display: none;

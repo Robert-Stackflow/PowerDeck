@@ -42,6 +42,12 @@ export function createPlatform(store, dataDir, publicURL) {
       id TEXT PRIMARY KEY,session_token TEXT NOT NULL REFERENCES audience_sessions(token) ON DELETE CASCADE,
       visitor TEXT NOT NULL,rating INTEGER NOT NULL,created_at INTEGER NOT NULL,
       UNIQUE(session_token,visitor)
+    );
+    CREATE TABLE IF NOT EXISTS audience_connections(
+      session_token TEXT NOT NULL REFERENCES audience_sessions(token) ON DELETE CASCADE,
+      device_id TEXT NOT NULL,user_agent TEXT NOT NULL DEFAULT '',ip TEXT NOT NULL DEFAULT '',
+      first_seen INTEGER NOT NULL,last_seen INTEGER NOT NULL,
+      PRIMARY KEY(session_token,device_id)
     );`);
 
   const brandKit = () => {
@@ -182,7 +188,14 @@ export function createPlatform(store, dataDir, publicURL) {
         .prepare(
           "SELECT COUNT(*) AS count,AVG(rating) AS average FROM audience_feedback WHERE session_token=?",
         )
-        .get(token);
+        .get(token),
+      connections = admin
+        ? db
+            .prepare(
+              "SELECT device_id AS deviceId,user_agent AS userAgent,ip,first_seen AS firstSeen,last_seen AS lastSeen FROM audience_connections WHERE session_token=? ORDER BY last_seen DESC",
+            )
+            .all(token)
+        : undefined;
     return {
       token,
       title: session.title,
@@ -197,8 +210,18 @@ export function createPlatform(store, dataDir, publicURL) {
         count: feedback.count,
         average: Number(feedback.average || 0),
       },
-      ...(admin ? { questions, url: audienceURL(token) } : {}),
+      ...(admin ? { questions, connections, url: audienceURL(token) } : {}),
     };
+  };
+  const recordAudienceConnection = (token, connection) => {
+    audienceSession(token);
+    const now = Date.now(),
+      deviceId = String(connection.deviceId || "anonymous").slice(0, 80),
+      userAgent = String(connection.userAgent || "").slice(0, 300),
+      ip = String(connection.ip || "").slice(0, 80);
+    db.prepare(
+      "INSERT INTO audience_connections(session_token,device_id,user_agent,ip,first_seen,last_seen) VALUES(?,?,?,?,?,?) ON CONFLICT(session_token,device_id) DO UPDATE SET user_agent=excluded.user_agent,ip=excluded.ip,last_seen=excluded.last_seen",
+    ).run(token, deviceId, userAgent, ip, now, now);
   };
   const createAudience = (deckId) => {
     const deck = store.get(deckId),
@@ -432,6 +455,7 @@ export function createPlatform(store, dataDir, publicURL) {
     useBrandAsset,
     createAudience,
     audienceState,
+    recordAudienceConnection,
     askQuestion,
     createPoll,
     vote,

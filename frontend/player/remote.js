@@ -2,6 +2,9 @@ import { icon } from "../icons.js";
 
 const root = document.querySelector("#remoteApp"),
   token = location.pathname.split("/").filter(Boolean)[1] || "";
+const deviceKey = "powerdeck-remote-device",
+  deviceId = localStorage.getItem(deviceKey) || crypto.randomUUID();
+localStorage.setItem(deviceKey, deviceId);
 let state,
   sending = false,
   lastSuccess = 0;
@@ -13,7 +16,11 @@ const duration = (milliseconds = 0) => {
 const request = async (path = "", options = {}) => {
   const response = await fetch(`/api/remote/${token}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers: {
+      "Content-Type": "application/json",
+      "X-PowerDeck-Device": deviceId,
+      ...options.headers,
+    },
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));

@@ -136,6 +136,11 @@ try {
   await page.locator('[data-inspector-tab="page"]').click();
   await page.locator("#pageTransitionTrigger").click();
   await page.locator('#pageTransitionOptions [data-value="fade"]').click();
+  const pageCount = await page.locator("[data-page-index]").count();
+  await page.locator("#applyTransitionAll").click();
+  await page
+    .locator("#transitionApplyStatus", { hasText: "应用到全部页面" })
+    .waitFor();
   await page.locator('[data-inspector-tab="references"]').click();
   await page.locator("#addReference").click();
   await page.locator(".reference-label").fill("产品文档");
@@ -157,11 +162,26 @@ try {
   const saved = await request(`/decks/${deck.id}/content`);
   assert.equal(saved.notes[1].referenceLibrary.length, 1);
   assert.match(saved.html, /模板内容/);
-  assert.match(saved.html, /data-transition="fade"/);
+  assert.equal(saved.html.match(/data-transition="fade"/g)?.length, pageCount);
 
   const projection = await context.newPage();
   await projection.goto(`${base}/present/${deck.slug}#1`);
   await projection.locator("#playerFrame:not([hidden])").waitFor();
+  await projection.evaluate(() => window.presentation.go(2));
+  const presentationFrame = projection.frameLocator("#playerFrame");
+  assert.equal(
+    await presentationFrame
+      .locator(".slide.active")
+      .getAttribute("data-transition"),
+    "fade",
+  );
+  assert.equal(
+    await presentationFrame
+      .locator(".slide.active")
+      .evaluate((element) => getComputedStyle(element).animationName),
+    "page-fade-in",
+  );
+  await projection.evaluate(() => window.presentation.go(1));
   const presenter = await context.newPage();
   await presenter.goto(`${base}/presenter/${deck.slug}#1`);
   await presenter.waitForTimeout(500);

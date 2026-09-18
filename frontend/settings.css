@@ -390,22 +390,56 @@
 }
 .workspace-user-list,
 .backup-list {
-  padding: 0 22px 18px;
+  padding: 0 22px 22px;
 }
 .workspace-user {
   display: grid;
-  grid-template-columns: 38px minmax(140px, 1fr) minmax(120px, 160px) auto auto;
-  gap: 10px;
+  grid-template-columns: 42px minmax(140px, 1fr) auto;
+  gap: 12px;
   align-items: center;
-  min-height: 66px;
-  border-top: 1px solid var(--line);
+  min-height: 72px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 .workspace-user:first-child {
-  border-top: 0;
+  margin-top: 0;
 }
-.workspace-user > div {
+.workspace-user:hover {
+  border-color: color-mix(in srgb, var(--accent) 25%, var(--line));
+}
+.workspace-user.disabled {
+  opacity: 0.66;
+}
+.workspace-user-copy {
   display: grid;
   gap: 4px;
+}
+.workspace-user-copy small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.member-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.workspace-user.disabled .member-status-dot {
+  background: var(--muted);
+  box-shadow: none;
+}
+.workspace-user-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .workspace-user .custom-select {
   min-width: 132px;
@@ -416,7 +450,8 @@
   border-radius: 8px;
 }
 .backup-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
   gap: 13px;
   margin: 0 22px 16px;
@@ -425,35 +460,71 @@
   border-radius: 10px;
   background: var(--soft);
 }
+.backup-restore-icon,
+.backup-symbol {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--paper));
+  color: var(--accent);
+}
+.backup-restore-icon svg,
+.backup-symbol svg {
+  width: 18px;
+}
+.backup-actions > div {
+  display: grid;
+  gap: 3px;
+}
 .backup-actions p {
   margin: 0;
   color: var(--muted);
   font-size: 11px;
 }
+.backup-list > header {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 2px 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
 .backup-list article {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 62px;
-  border-top: 1px solid var(--line);
-}
-.backup-list article > div {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1;
-}
-.backup-list article > div > span {
   display: grid;
-  gap: 4px;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.backup-copy {
+  display: grid;
+  gap: 3px;
   min-width: 0;
+}
+.backup-copy code {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .backup-list b {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+}
+.backup-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 @media (max-width: 900px) {
   .brand-kit-fields {
@@ -466,10 +537,11 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .workspace-user {
-    grid-template-columns: 38px minmax(100px, 1fr) auto auto;
+    grid-template-columns: 38px minmax(100px, 1fr);
   }
-  .workspace-user .custom-select {
+  .workspace-user-actions {
     grid-column: 2/-1;
+    flex-wrap: wrap;
   }
 }
 @media (max-width: 560px) {
@@ -481,8 +553,17 @@
     grid-column: auto;
   }
   .backup-actions {
-    align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-items: start;
+  }
+  .backup-actions > label {
+    grid-column: 1/-1;
+  }
+  .backup-list article {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+  .backup-item-actions {
+    grid-column: 2/-1;
   }
 }
 .auth-link {

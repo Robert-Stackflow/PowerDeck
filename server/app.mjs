@@ -130,6 +130,33 @@ export async function createApp({
     res.end(html);
   };
   const presenterSessions = new Map();
+  const clientConnection = (req) => {
+    const forwarded = String(req.headers["x-forwarded-for"] || "")
+        .split(",")[0]
+        .trim(),
+      ip = forwarded || req.socket.remoteAddress || "未知",
+      userAgent = String(req.headers["user-agent"] || "未知设备").slice(0, 300),
+      supplied = String(req.headers["x-powerdeck-device"] || "").trim(),
+      deviceId = /^[A-Za-z0-9_.:-]{8,80}$/.test(supplied)
+        ? supplied
+        : crypto
+            .createHash("sha256")
+            .update(`${ip}|${userAgent}`)
+            .digest("hex")
+            .slice(0, 20);
+    return { deviceId, userAgent, ip };
+  };
+  const recordRemoteConnection = (value, req) => {
+    const current = clientConnection(req),
+      previous = value.connections.get(current.deviceId),
+      now = Date.now();
+    value.connections.set(current.deviceId, {
+      ...current,
+      firstSeen: previous?.firstSeen || now,
+      lastSeen: now,
+    });
+    return current;
+  };
   const presenterSession = (token) => {
     const value = presenterSessions.get(token);
     if (!value || Date.now() - value.touchedAt > 6 * 60 * 60 * 1000) {
@@ -151,6 +178,12 @@ export async function createApp({
       updatedAt: value.touchedAt,
     };
   };
+  const remoteAdminState = (value) => ({
+    ...remoteState(value),
+    connections: [...value.connections.values()].sort(
+      (a, b) => b.lastSeen - a.lastSeen,
+    ),
+  });
   const server = http.createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -208,8 +241,10 @@ export async function createApp({
           "遥控会话编号不正确",
         );
         const value = presenterSession(parts[2]);
-        if (parts.length === 3 && method === "GET")
+        if (parts.length === 3 && method === "GET") {
+          recordRemoteConnection(value, req);
           return json(res, 200, remoteState(value));
+        }
         if (parts[3] === "commands" && method === "GET") {
           const after = Number(requestURL.searchParams.get("after")) || 0;
           value.touchedAt = Date.now();
@@ -218,6 +253,7 @@ export async function createApp({
           });
         }
         if (parts[3] === "actions" && method === "POST") {
+          recordRemoteConnection(value, req);
           const input = await readJSON(req, 8192);
           requireValue(
             ["previous", "next", "go", "toggleTimer", "resetTimer"].includes(
@@ -250,6 +286,7 @@ export async function createApp({
           /^[A-Za-z0-9_-]{32}$/.test(audienceToken),
           "互动会话编号不正确",
         );
+        platform.recordAudienceConnection(audienceToken, clientConnection(req));
         if (parts.length === 3 && method === "GET")
           return json(res, 200, platform.audienceState(audienceToken));
         const input = await readJSON(req, 16384);
@@ -479,6 +516,7 @@ export async function createApp({
               elapsed: 0,
               sequence: 0,
               commands: [],
+              connections: new Map(),
               touchedAt: Date.now(),
             };
           presenterSessions.set(token, value);
@@ -503,7 +541,7 @@ export async function createApp({
             if (Number.isFinite(input.elapsed) && input.elapsed >= 0)
               value.elapsed = Math.min(input.elapsed, 7 * 24 * 60 * 60 * 1000);
             value.touchedAt = Date.now();
-            return json(res, 200, remoteState(value));
+            return json(res, 200, remoteAdminState(value));
           }
           if (method === "DELETE") {
             presenterSessions.delete(parts[2]);

@@ -28,12 +28,18 @@ try {
   await page.locator("input[name=confirm]").fill("platform-browser-123");
   await page.getByRole("button", { name: "创建并进入" }).click();
   const initialTheme = await page.locator("html").getAttribute("data-theme");
-  await page.locator("#sidebarTheme").click();
-  assert.notEqual(
+  const toggledTheme = initialTheme === "dark" ? "light" : "dark";
+  await page.locator(`[data-theme-choice="${toggledTheme}"]`).click();
+  assert.equal(
     await page.locator("html").getAttribute("data-theme"),
-    initialTheme,
+    toggledTheme,
   );
-  const toggledTheme = await page.locator("html").getAttribute("data-theme");
+  assert.equal(
+    await page
+      .locator(`[data-theme-choice="${toggledTheme}"]`)
+      .getAttribute("aria-selected"),
+    "true",
+  );
   await page.reload();
   assert.equal(
     await page.locator("html").getAttribute("data-theme"),
@@ -67,10 +73,11 @@ try {
   await page
     .locator(".workspace-user", { hasText: /editor2.*查看者/s })
     .waitFor();
+  await page.screenshot({ path: path.join(dir, "members.png") });
 
   await page.getByRole("button", { name: /备份中心/ }).click();
   await page.locator("#createBackup").click();
-  await page.locator(".backup-list article").waitFor();
+  await page.locator(".backup-list .backup-copy").waitFor();
 
   await page.goto(base + "/edit/areal");
   await page.locator("#visualCanvas[data-ready=true]").waitFor();
@@ -96,15 +103,26 @@ try {
   await player
     .locator(".audience-questions", { hasText: "测试问题" })
     .waitFor();
+  await player
+    .locator(".audience-connections .connection-list article")
+    .waitFor();
+  await projection.screenshot({ path: path.join(dir, "audience-dialog.png") });
   await player.locator("[data-close=audiencePanel]").click();
   await player.locator("#remoteControlBtn").click();
   await player.locator("#remoteSessionBody.session-connect").waitFor();
+  const remoteURL = await player.locator("#remoteControlURL").inputValue();
+  const remote = await page.context().newPage();
+  await remote.goto(new URL(remoteURL, base).href);
+  await player.locator("#remoteDeviceList article").waitFor({ timeout: 4000 });
+  await projection.screenshot({ path: path.join(dir, "remote-dialog.png") });
+  await remote.close();
   await audience.close();
   await projection.close();
   assert.deepEqual(errors, []);
   console.log(
     "PASS brand library, workspace members, backup center and audience UI",
   );
+  console.log(`Screenshots: ${dir}`);
 } finally {
   await browser.close();
   await app.close();

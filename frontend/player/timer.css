@@ -196,8 +196,16 @@
     padding-bottom: 6px;
     border-bottom: 1px solid #ffffff20;
   }
-  #controls #timerDivider {
+  #controls #timerDivider,
+  #controls > .session-divider {
     display: none;
+  }
+  #controls > .session-control-group {
+    order: 1;
+    justify-content: center;
+    width: 100%;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #ffffff20;
   }
 }
 @media (max-width: 480px) {
@@ -232,6 +240,14 @@
   }
   .timing-table {
     padding: 0 10px 12px;
+  }
+}
+@media (max-width: 560px) {
+  #dockTools {
+    flex-wrap: wrap;
+    justify-content: center;
+    overflow: visible;
+    row-gap: 2px;
   }
 }
 @media (max-width: 360px) {
@@ -284,6 +300,26 @@ body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
   opacity: 0;
   overflow: hidden;
   pointer-events: none;
+}
+body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
+  #dockTools
+  > * {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  margin: 0;
+  padding: 0;
+  border-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
+  #dockTools
+  .session-control-group
+  > * {
+  width: 0 !important;
+  min-width: 0 !important;
 }
 body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
   #presentationTimer {
@@ -343,6 +379,7 @@ body.timer-running:not(.dock-visible):not(.panel-open):not(.menu-open)
     gap 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 #controls > *,
+#dockTools > *,
 #presentationTimer > * {
   transition:
     width 0.3s cubic-bezier(0.22, 1, 0.36, 1),

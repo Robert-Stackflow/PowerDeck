@@ -292,6 +292,9 @@ export function mountPresenter({
   const dock = $("controls");
   const dockButton = (id, icon, label, extra = "") =>
     `<button id="${id}" type="button" aria-label="${label}" data-tip="${label}" ${extra}>${ico(icon)}</button>`;
+  const sessionToolsMarkup = presenterURL
+    ? `<span class="nav-divider session-divider" aria-hidden="true"></span><div class="session-control-group" role="group" aria-label="演讲辅助">${dockButton("presenterViewBtn", "presenter", "演讲者视图")}${dockButton("remoteControlBtn", "smartphone", "手机遥控")}${dockButton("audienceBtn", "audience", "观众互动")}</div>`
+    : "";
   dock.innerHTML =
     '<div id="dockTools" class="dock-tools">' +
     dockButton("prev", "prev", "上一页 ←") +
@@ -310,9 +313,6 @@ export function mountPresenter({
     '<span class="nav-divider"></span>' +
     dockButton("overviewBtn", "overview", "目录 G") +
     dockButton("notesBtn", "notes", "备注 N") +
-    (presenterURL
-      ? `<span class="session-control-group" role="group" aria-label="演讲辅助">${dockButton("presenterViewBtn", "presenter", "演讲者视图")}${dockButton("remoteControlBtn", "smartphone", "手机遥控")}${dockButton("audienceBtn", "audience", "观众互动")}</span>`
-      : "") +
     (editURL ? dockButton("editBtn", "edit", "编辑当前页") : "") +
     dockButton("fullscreenBtn", "full", "全屏 F") +
     dockButton(
@@ -321,13 +321,14 @@ export function mountPresenter({
       "更多",
       'aria-haspopup="menu" aria-expanded="false"',
     ) +
-    "</div>";
+    "</div>" +
+    sessionToolsMarkup;
   const ui = document.createElement("div");
   ui.id = "presenterUI";
   ui.innerHTML =
     '<button id="dockReveal" aria-label="显示演示工具"></button><div id="toolMenu" class="presenter-menu" role="menu" aria-label="指针与墨迹" hidden></div><div id="contextMenu" class="presenter-menu" role="menu" aria-label="演示菜单" hidden></div><div id="moreMenu" class="presenter-menu" role="menu" aria-label="更多操作" hidden></div><div id="laserDot"></div><div id="eraserCursor"></div>' +
     (presenterURL
-      ? `<section id="remoteControlPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="session-dialog-card remote-session-card"><button class="session-dialog-close" type="button" data-close="remoteControlPanel" aria-label="关闭">${ico("close")}</button><div class="session-dialog-copy"><p>手机遥控</p><h2 id="remoteControlTitle">用手机控制当前演示</h2><span>扫码即可切换页面、查看备注和控制计时，无需登录。</span></div><div id="remoteSessionBody" class="session-loading">正在创建遥控会话…</div></div></section><section id="audiencePanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="audienceTitle"><div class="session-dialog-card audience-session-card"><button class="session-dialog-close" type="button" data-close="audiencePanel" aria-label="关闭">${ico("close")}</button><div class="session-dialog-copy"><p>现场互动</p><h2 id="audienceTitle">让观众参与演示</h2><span>观众可匿名提问、参与投票并提交评分。</span></div><div id="audienceSetup" class="audience-session-setup"><button id="startAudience" type="button">开启观众互动</button></div><div id="audienceDashboard" hidden></div></div></section>`
+      ? `<section id="remoteControlPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="session-dialog-card remote-session-card"><div class="overlay-head"><div><p class="session-kicker">演讲辅助</p><h2 id="remoteControlTitle">手机遥控</h2><span>扫码连接后即可控制演示</span></div><button class="dialog-close" type="button" data-close="remoteControlPanel" aria-label="关闭手机遥控">${ico("close")}</button></div><div id="remoteSessionBody" class="session-loading">正在创建遥控会话…</div></div></section><section id="audiencePanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="audienceTitle"><div class="session-dialog-card audience-session-card"><div class="overlay-head"><div><p class="session-kicker">现场互动</p><h2 id="audienceTitle">观众互动</h2><span>提问、投票、评分</span></div><button class="dialog-close" type="button" data-close="audiencePanel" aria-label="关闭观众互动">${ico("close")}</button></div><div id="audienceSetup" class="audience-session-setup"><button id="startAudience" type="button">开启观众互动</button></div><div id="audienceDashboard" hidden></div></div></section>`
       : "");
   document.body.append(ui);
   const fv = document.createElement("aside");
@@ -851,6 +852,31 @@ export function mountPresenter({
       toast("复制失败，请手动复制链接");
     }
   }
+  function connectionDevice(userAgent = "") {
+    if (/iPad/i.test(userAgent)) return "iPad";
+    if (/iPhone/i.test(userAgent)) return "iPhone";
+    if (/Android/i.test(userAgent)) return "Android 设备";
+    if (/Windows/i.test(userAgent)) return "Windows 设备";
+    if (/Macintosh|Mac OS/i.test(userAgent)) return "Mac";
+    if (/Linux/i.test(userAgent)) return "Linux 设备";
+    return "浏览器设备";
+  }
+  function connectionsMarkup(connections = []) {
+    return connections.length
+      ? connections
+          .map(
+            (connection) =>
+              `<article><span class="connection-device-icon">${ico(/Mobile|iPhone|Android/i.test(connection.userAgent) ? "smartphone" : "monitor")}</span><div><b>${escapeHTML(connectionDevice(connection.userAgent))}</b><small title="${escapeHTML(connection.userAgent)}">${escapeHTML(connection.userAgent)}</small><em>设备 ${escapeHTML(connection.deviceId.slice(0, 8))} · ${escapeHTML(connection.ip)}</em></div><time>${new Date(connection.lastSeen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></article>`,
+          )
+          .join("")
+      : '<p class="session-empty">等待设备连接</p>';
+  }
+  function updateRemoteConnections(connections = []) {
+    const list = $("remoteDeviceList"),
+      count = $("remoteDeviceCount");
+    if (list) list.innerHTML = connectionsMarkup(connections);
+    if (count) count.textContent = `${connections.length} 台`;
+  }
   function startRemoteSync() {
     if (remoteInterval) return;
     remoteInterval = hostWindow.setInterval(async () => {
@@ -858,14 +884,19 @@ export function mountPresenter({
       remoteBusy = true;
       try {
         const state = timer.snapshot();
-        await sessionRequest(`/presenter-sessions/${remoteSession.token}`, {
-          method: "PATCH",
-          body: {
-            page: current,
-            running: state.running,
-            elapsed: state.total,
+        const adminState = await sessionRequest(
+          `/presenter-sessions/${remoteSession.token}`,
+          {
+            method: "PATCH",
+            body: {
+              page: current,
+              running: state.running,
+              elapsed: state.total,
+            },
           },
-        });
+        );
+        remoteSession.connections = adminState.connections || [];
+        updateRemoteConnections(remoteSession.connections);
         const result = await sessionRequest(
           `/remote/${remoteSession.token}/commands?after=${lastRemoteCommand}`,
         );
@@ -893,7 +924,7 @@ export function mountPresenter({
         body: { deckId, page: current },
       });
       body.className = "session-connect";
-      body.innerHTML = `<img src="${escapeHTML(remoteSession.qr)}" alt="手机遥控二维码"><div><label for="remoteControlURL">遥控地址</label><div class="session-link"><input id="remoteControlURL" value="${escapeHTML(remoteSession.url)}" readonly><button type="button">${ico("check")}复制链接</button></div><small><i></i>会话已连接到当前演示</small></div>`;
+      body.innerHTML = `<div class="session-connect-main"><div class="session-qr"><div class="session-qr-frame"><img src="${escapeHTML(remoteSession.qr)}" alt="手机遥控二维码"></div><span>${ico("smartphone")}扫码连接</span></div><div><label for="remoteControlURL">遥控地址</label><div class="session-link"><input id="remoteControlURL" value="${escapeHTML(remoteSession.url)}" readonly><button type="button">${ico("check")}复制链接</button></div><small><i></i>已连接当前演示</small></div></div><section class="session-connections"><div class="connection-heading"><div><h3>连接设备</h3><p>近期开启此遥控器的设备</p></div><span id="remoteDeviceCount">0 台</span></div><div id="remoteDeviceList" class="connection-list">${connectionsMarkup([])}</div></section>`;
       body.querySelector("button").onclick = (event) =>
         copySessionLink(event.currentTarget, remoteSession.url);
       startRemoteSync();
@@ -906,8 +937,34 @@ export function mountPresenter({
     if (!audienceSession) return;
     const panel = $("audienceDashboard"),
       poll = audienceSession.poll,
-      feedback = audienceSession.feedback;
-    panel.innerHTML = `<div class="session-connect audience-connect"><img src="${escapeHTML(audienceSession.qr || panel.querySelector("img")?.src || "")}" alt="观众互动二维码"><div><label>互动地址</label><div class="session-link"><input value="${escapeHTML(audienceSession.url)}" readonly><button type="button" data-copy-audience>${ico("check")}复制链接</button></div><div class="audience-metrics"><span><b>${audienceSession.questionCount}</b> 个问题</span><span><b>${poll?.votes || 0}</b> 人投票</span><span><b>${feedback.count ? feedback.average.toFixed(1) : "—"}</b> 平均评分</span></div></div></div><form id="audiencePollForm" class="audience-poll-form"><label>投票题目<input name="question" maxlength="200" placeholder="例如：下一部分想先听什么？" required></label><label>选项（每行一个）<textarea name="options" rows="3" placeholder="选项 A&#10;选项 B" required></textarea></label><div><button class="session-primary" type="submit">${poll?.status === "open" ? "发布新投票" : "发起投票"}</button>${poll?.status === "open" ? '<button type="button" class="audience-close-poll">结束当前投票</button>' : ""}</div></form>${poll ? `<section class="audience-live-poll"><h3>${escapeHTML(poll.question)}</h3>${poll.options.map((option) => `<div><span>${escapeHTML(option.label)}</span><b>${option.count}</b></div>`).join("")}</section>` : ""}<section class="audience-questions"><h3>观众问题</h3>${audienceSession.questions.length ? audienceSession.questions.map((question) => `<button type="button" data-question="${question.id}" class="${question.answered ? "answered" : ""}"><span><b>${escapeHTML(question.name)}</b>${escapeHTML(question.body)}</span>${question.answered ? ico("check") : "标记已回答"}</button>`).join("") : '<p class="session-empty">还没有收到问题</p>'}</section>`;
+      feedback = audienceSession.feedback,
+      qr = audienceSession.qr || panel.querySelector("img")?.src || "",
+      totalVotes = poll?.votes || 0,
+      unanswered = audienceSession.questions.filter(
+        (question) => !question.answered,
+      ).length;
+    panel.innerHTML = `<div class="session-connect audience-connect"><div class="session-qr"><div class="session-qr-frame"><img src="${escapeHTML(qr)}" alt="观众互动二维码"></div><span>${ico("audience")}扫码加入</span></div><div><label>互动地址</label><div class="session-link"><input value="${escapeHTML(audienceSession.url)}" readonly><button type="button" data-copy-audience>${ico("check")}复制链接</button></div><div class="audience-metrics"><span><b>${audienceSession.questionCount}</b>问题</span><span><b>${totalVotes}</b>投票</span><span><b>${feedback.count ? feedback.average.toFixed(1) : "—"}</b>评分</span></div></div></div><section class="session-connections audience-connections"><div class="connection-heading"><div><h3>参与设备</h3><p>已打开互动页面的设备</p></div><span>${audienceSession.connections?.length || 0} 台</span></div><div class="connection-list">${connectionsMarkup(audienceSession.connections)}</div></section><div class="audience-dashboard-grid"><form id="audiencePollForm" class="audience-poll-form"><div class="poll-heading"><div><h3>发起投票</h3><p>设置问题与选项</p></div>${poll?.status === "open" ? '<span class="session-status live"><i></i>进行中</span>' : '<span class="session-status">未开始</span>'}</div><label>投票题目<input name="question" maxlength="200" placeholder="输入一个简短问题" required></label><div class="poll-option-fields"><label>选项 1<input name="option" maxlength="100" placeholder="输入选项" required></label><label>选项 2<input name="option" maxlength="100" placeholder="输入选项" required></label></div><button type="button" class="add-poll-option">${ico("plus")}添加选项</button><div class="poll-actions"><button class="session-primary" type="submit">${poll?.status === "open" ? "发布新投票" : "发起投票"}</button>${poll?.status === "open" ? '<button type="button" class="audience-close-poll">结束当前投票</button>' : ""}</div></form>${
+      poll
+        ? `<section class="audience-live-poll"><div class="poll-heading"><div><h3>${escapeHTML(poll.question)}</h3><p>${totalVotes} 人参与</p></div><span class="session-status ${poll.status === "open" ? "live" : ""}">${poll.status === "open" ? "实时" : "已结束"}</span></div><div class="poll-result-list">${poll.options
+            .map((option) => {
+              const percent = totalVotes
+                ? Math.round((option.count / totalVotes) * 100)
+                : 0;
+              return `<div class="poll-result"><div><span>${escapeHTML(option.label)}</span><b>${option.count} · ${percent}%</b></div><i><span style="width:${percent}%"></span></i></div>`;
+            })
+            .join("")}</div></section>`
+        : '<section class="audience-live-poll empty-poll"><h3>实时结果</h3><p>发起投票后，结果会在这里更新。</p></section>'
+    }</div><section class="audience-questions"><div class="question-heading"><div><h3>观众问题</h3><p>${unanswered ? `${unanswered} 个待回答` : "暂无待回答问题"}</p></div><span>${audienceSession.questionCount}</span></div>${
+      audienceSession.questions.length
+        ? [...audienceSession.questions]
+            .sort((a, b) => Number(a.answered) - Number(b.answered))
+            .map(
+              (question) =>
+                `<button type="button" data-question="${question.id}" class="${question.answered ? "answered" : ""}"><span><b>${escapeHTML(question.name || "匿名观众")}</b>${escapeHTML(question.body)}</span><em>${question.answered ? `${ico("check")}已回答` : "标记已回答"}</em></button>`,
+            )
+            .join("")
+        : '<p class="session-empty">还没有收到问题</p>'
+    }</section>`;
     panel.querySelector("[data-copy-audience]").onclick = (event) =>
       copySessionLink(event.currentTarget, audienceSession.url);
     panel.querySelector("#audiencePollForm").onsubmit = async (event) => {
@@ -922,9 +979,9 @@ export function mountPresenter({
             method: "POST",
             body: {
               question: form.get("question"),
-              options: String(form.get("options"))
-                .split("\n")
-                .map((value) => value.trim())
+              options: form
+                .getAll("option")
+                .map((value) => String(value).trim())
                 .filter(Boolean),
             },
           },
@@ -934,6 +991,16 @@ export function mountPresenter({
         button.disabled = false;
         toast(error.message);
       }
+    };
+    panel.querySelector(".add-poll-option").onclick = () => {
+      const fields = panel.querySelector(".poll-option-fields"),
+        count = fields.children.length;
+      if (count >= 8) return toast("最多可添加 8 个选项");
+      const label = document.createElement("label");
+      label.innerHTML = `选项 ${count + 1}<span><input name="option" maxlength="100" placeholder="输入选项" required><button type="button" aria-label="删除选项">${ico("close")}</button></span>`;
+      label.querySelector("button").onclick = () => label.remove();
+      fields.append(label);
+      label.querySelector("input").focus();
     };
     panel
       .querySelector(".audience-close-poll")
@@ -977,7 +1044,8 @@ export function mountPresenter({
           );
           next.qr = audienceSession.qr;
           audienceSession = next;
-          renderAudienceDashboard();
+          if (!document.activeElement?.closest("#audiencePollForm"))
+            renderAudienceDashboard();
         } catch {}
       }, 1800);
     } catch (error) {
