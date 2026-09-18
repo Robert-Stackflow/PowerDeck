@@ -26,12 +26,104 @@ const cleanPermissions = (value = {}) =>
   );
 
 export function createRooms(store, publicURL = "") {
-  const rooms = new Map();
+  const rooms = new Map(),
+    db = store.db;
+  db.exec(`CREATE TABLE IF NOT EXISTS presentation_rooms(
+    token TEXT PRIMARY KEY,
+    deck_id TEXT NOT NULL,
+    state TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    touched_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS presentation_rooms_touched
+    ON presentation_rooms(touched_at DESC);`);
+  const saveRoom = db.prepare(`INSERT INTO presentation_rooms(
+      token,deck_id,state,created_at,touched_at
+    ) VALUES(?,?,?,?,?)
+    ON CONFLICT(token) DO UPDATE SET
+      deck_id=excluded.deck_id,
+      state=excluded.state,
+      created_at=excluded.created_at,
+      touched_at=excluded.touched_at`),
+    deleteRoom = db.prepare("DELETE FROM presentation_rooms WHERE token=?"),
+    savedRooms = db.prepare(
+      "SELECT state FROM presentation_rooms WHERE touched_at>? ORDER BY touched_at",
+    );
+
+  function serializable(room) {
+    return {
+      token: room.token,
+      hostToken: room.hostToken,
+      deckId: room.deckId,
+      title: room.title,
+      total: room.total,
+      page: room.page,
+      permissions: room.permissions,
+      interactionToken: room.interactionToken,
+      password: room.password,
+      admissions: [...room.admissions],
+      identities: [...room.identities],
+      pointer: room.pointer,
+      ink: room.ink,
+      createdAt: room.createdAt,
+      touchedAt: room.touchedAt,
+    };
+  }
+
+  function persistNow(room) {
+    if (room.persistTimer) clearTimeout(room.persistTimer);
+    room.persistTimer = null;
+    saveRoom.run(
+      room.token,
+      room.deckId,
+      JSON.stringify(serializable(room)),
+      room.createdAt,
+      room.touchedAt,
+    );
+  }
+
+  function persistSoon(room) {
+    if (room.persistTimer) return;
+    room.persistTimer = setTimeout(() => persistNow(room), 400);
+    room.persistTimer.unref?.();
+  }
+
+  function forget(roomToken) {
+    const room = rooms.get(roomToken);
+    if (room?.persistTimer) clearTimeout(room.persistTimer);
+    rooms.delete(roomToken);
+    deleteRoom.run(roomToken);
+  }
+
+  for (const row of savedRooms.all(Date.now() - MAX_AGE)) {
+    try {
+      const saved = JSON.parse(row.state),
+        deck = store.get(saved.deckId),
+        room = {
+          ...saved,
+          title: deck.title,
+          total: deck.slideCount,
+          page: clampPage(saved.page, deck.slideCount),
+          permissions: cleanPermissions(saved.permissions),
+          admissions: new Map(saved.admissions || []),
+          identities: new Map(saved.identities || []),
+          pointer: saved.pointer || null,
+          ink: saved.ink && typeof saved.ink === "object" ? saved.ink : {},
+          clients: new Set(),
+          persistTimer: null,
+        };
+      room.url = `${publicURL}/room/${room.token}`;
+      rooms.set(room.token, room);
+    } catch {}
+  }
+  db.prepare("DELETE FROM presentation_rooms WHERE touched_at<=?").run(
+    Date.now() - MAX_AGE,
+  );
 
   function get(roomToken) {
     const room = rooms.get(roomToken);
     if (!room || Date.now() - room.touchedAt > MAX_AGE) {
-      rooms.delete(roomToken);
+      if (room) forget(roomToken);
       return null;
     }
     return room;
@@ -74,7 +166,7 @@ export function createRooms(store, publicURL = "") {
   function list() {
     const now = Date.now();
     for (const [roomToken, room] of rooms)
-      if (now - room.touchedAt > MAX_AGE) rooms.delete(roomToken);
+      if (now - room.touchedAt > MAX_AGE) forget(roomToken);
     return [...rooms.values()]
       .map((room) => ({
         token: room.token,
@@ -144,11 +236,13 @@ export function createRooms(store, publicURL = "") {
         pointer: null,
         ink: {},
         clients: new Set(),
+        persistTimer: null,
         createdAt: Date.now(),
         touchedAt: Date.now(),
       };
     room.url = `${publicURL}/room/${roomToken}`;
     rooms.set(roomToken, room);
+    persistNow(room);
     return adminState(room);
   }
 
@@ -219,6 +313,7 @@ export function createRooms(store, publicURL = "") {
       joinedAt: Date.now(),
     });
     room.touchedAt = Date.now();
+    persistNow(room);
     return { token: admissionToken, name: cleanName };
   }
 
@@ -272,6 +367,7 @@ export function createRooms(store, publicURL = "") {
       }
     }
     room.touchedAt = Date.now();
+    persistNow(room);
     broadcast(room, { type: "state", state: publicState(room) });
     return adminState(room);
   }
@@ -280,7 +376,7 @@ export function createRooms(store, publicURL = "") {
     const room = requireHost(roomToken, hostToken);
     broadcast(room, { type: "ended" });
     for (const client of room.clients) client.ws.close(1000, "room ended");
-    rooms.delete(roomToken);
+    forget(roomToken);
     return room;
   }
 
@@ -308,6 +404,7 @@ export function createRooms(store, publicURL = "") {
     };
     room.clients.add(client);
     room.touchedAt = Date.now();
+    persistSoon(room);
     send(client, {
       type: "snapshot",
       role,
@@ -342,6 +439,7 @@ export function createRooms(store, publicURL = "") {
       client.connection.lastSeen = room.touchedAt;
       if (message.type === "page") {
         room.page = clampPage(message.page, room.total);
+        persistSoon(room);
         broadcast(room, { type: "page", page: room.page }, "viewer");
       } else if (message.type === "pointer") {
         const point = message.pointer;
@@ -362,11 +460,13 @@ export function createRooms(store, publicURL = "") {
                 visible: point.visible !== false,
               }
             : null;
+        persistSoon(room);
         broadcast(room, { type: "pointer", pointer: room.pointer }, "viewer");
       } else if (message.type === "ink") {
         const page = clampPage(message.page, room.total);
         if (Array.isArray(message.strokes)) {
           room.ink[page] = message.strokes.slice(0, 300);
+          persistSoon(room);
           broadcast(
             room,
             { type: "ink", page, strokes: room.ink[page] },
@@ -396,7 +496,7 @@ export function createRooms(store, publicURL = "") {
       for (const [roomToken, room] of rooms)
         if (Date.now() - room.touchedAt > MAX_AGE) {
           for (const client of room.clients) client.ws.close(1001, "expired");
-          rooms.delete(roomToken);
+          forget(roomToken);
         }
     },
     10 * 60 * 1000,
@@ -418,8 +518,10 @@ export function createRooms(store, publicURL = "") {
     attach,
     close() {
       clearInterval(cleanup);
-      for (const room of rooms.values())
+      for (const room of rooms.values()) {
+        persistNow(room);
         for (const client of room.clients) client.ws.close(1001, "shutdown");
+      }
       rooms.clear();
     },
   };

@@ -2,6 +2,7 @@ import { mountPresenter } from "./runtime.js";
 import { playerDocument } from "./document.js";
 import { icons, icon } from "../icons.js";
 import { loadSite, site, setFavicon } from "../branding.js";
+import { preparePlayerFrame, revealPlayerFrame } from "./readiness.js";
 const parts = location.pathname
     .split("/")
     .filter(Boolean)
@@ -61,9 +62,6 @@ try {
     "load",
     async () => {
       try {
-        await frame.contentDocument.fonts.ready;
-        frame.style.visibility = "hidden";
-        frame.hidden = false;
         window.presentation = mountPresenter({
           window: frame.contentWindow,
           hostWindow: window,
@@ -114,24 +112,7 @@ try {
                 }
               : null,
         });
-        await frame.contentDocument.fonts.ready;
-        await new Promise((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(resolve)),
-        );
-        frame.style.visibility = "visible";
-        loading.setAttribute("aria-hidden", "true");
-        loading.classList.add("is-leaving");
-        const dismissLoading = () => {
-          loading.hidden = true;
-        };
-        if (matchMedia("(prefers-reduced-motion: reduce)").matches)
-          dismissLoading();
-        else {
-          loading.addEventListener("transitionend", dismissLoading, {
-            once: true,
-          });
-          setTimeout(dismissLoading, 220);
-        }
+        await revealPlayerFrame(frame, loading);
         frame.contentDocument.querySelector("#stage").focus();
       } catch (e) {
         fail(e);
@@ -139,6 +120,7 @@ try {
     },
     { once: true },
   );
+  preparePlayerFrame(frame);
   frame.srcdoc = playerDocument({
     ...content,
     meta,

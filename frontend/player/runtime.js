@@ -113,6 +113,11 @@ export function mountPresenter({
     roomInkSyncTimer = 0,
     roomInkSyncPage = 0,
     roomPingInterval = 0,
+    roomReconnectTimer = 0,
+    roomReconnectDelay = 700,
+    roomSocketGeneration = 0,
+    roomRestoreTimer = 0,
+    roomRestoreDelay = 700,
     roomLatency = null,
     roomFeedState = null,
     roomFeedSignature = "",
@@ -163,7 +168,11 @@ export function mountPresenter({
       ...(options.keepalive ? { keepalive: true } : {}),
     });
     const value = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(value.error || "请求失败");
+    if (!response.ok) {
+      const error = new Error(value.error || "请求失败");
+      error.status = response.status;
+      throw error;
+    }
     return value;
   };
   const roomAudienceRequest = async (path = "", options = {}) => {
@@ -1298,7 +1307,6 @@ export function mountPresenter({
       ui.insertAdjacentHTML("beforeend", roomFeedMarkup(true));
     else if (!shouldShowFeed) {
       $("roomLiveFeed")?.remove();
-      document.body.classList.remove("room-feed-expanded");
     }
     bindRoomFeedComposer();
     applyRoomFeedPermissions(roomSession.permissions);
@@ -1332,10 +1340,6 @@ export function mountPresenter({
     feed.addEventListener("pointerdown", scheduleCollapse);
     feed.addEventListener("focusin", scheduleCollapse);
     input.addEventListener("input", scheduleCollapse);
-    document.body.classList.toggle(
-      "room-feed-expanded",
-      !feed.classList.contains("collapsed"),
-    );
     scheduleCollapse();
     toggle.onclick = () => {
       picker.hidden = !picker.hidden;
@@ -1404,7 +1408,6 @@ export function mountPresenter({
       badge = feed?.querySelector(".room-feed-unread");
     if (!feed || !toggle) return;
     feed.classList.toggle("collapsed", collapsed);
-    document.body.classList.toggle("room-feed-expanded", !collapsed);
     toggle.setAttribute("aria-expanded", String(!collapsed));
     toggle.setAttribute(
       "aria-label",
@@ -1576,12 +1579,23 @@ export function mountPresenter({
     renderLiveFeed(roomFeedState || { poll: null, comments: [] });
   }
   function connectRoom() {
-    roomSocket?.close();
+    if (!roomSession) return;
+    hostWindow.clearTimeout(roomReconnectTimer);
     hostWindow.clearInterval(roomPingInterval);
-    const protocol = hostWindow.location.protocol === "https:" ? "wss:" : "ws:",
-      socketURL = `${protocol}//${hostWindow.location.host}/ws/rooms/${roomSession.token}?host=${encodeURIComponent(roomSession.hostToken)}`;
+    const previous = roomSocket;
+    if (previous) {
+      previous.onclose = null;
+      previous.close();
+    }
+    const generation = ++roomSocketGeneration,
+      session = roomSession,
+      protocol = hostWindow.location.protocol === "https:" ? "wss:" : "ws:",
+      socketURL = `${protocol}//${hostWindow.location.host}/ws/rooms/${session.token}?host=${encodeURIComponent(session.hostToken)}`;
     roomSocket = new hostWindow.WebSocket(socketURL);
     roomSocket.onopen = () => {
+      if (generation !== roomSocketGeneration || roomSession !== session)
+        return;
+      roomReconnectDelay = 700;
       roomSend({ type: "page", page: current });
       for (let page = 1; page <= total; page++)
         if (annotations[page]?.length) syncRoomInk(page);
@@ -1590,6 +1604,8 @@ export function mountPresenter({
       roomPingInterval = hostWindow.setInterval(ping, 3000);
     };
     roomSocket.onmessage = ({ data: raw }) => {
+      if (generation !== roomSocketGeneration || roomSession !== session)
+        return;
       try {
         const message = JSON.parse(raw);
         if (message.type === "participants") {
@@ -1603,11 +1619,16 @@ export function mountPresenter({
       } catch {}
     };
     roomSocket.onclose = () => {
+      if (generation !== roomSocketGeneration || roomSession !== session)
+        return;
       hostWindow.clearInterval(roomPingInterval);
-      if (roomSession)
-        hostWindow.setTimeout(() => {
-          if (roomSession) connectRoom();
-        }, 900);
+      roomSocket = null;
+      updateRoomPresence(roomSession.connections?.length || 0, null);
+      const delay = roomReconnectDelay + Math.random() * 180;
+      roomReconnectDelay = Math.min(8000, roomReconnectDelay * 1.65);
+      roomReconnectTimer = hostWindow.setTimeout(() => {
+        if (roomSession === session) connectRoom();
+      }, delay);
     };
   }
   const roomTabs = [
@@ -1777,6 +1798,38 @@ export function mountPresenter({
       };
     });
   }
+  function rememberRoomSession(session) {
+    const saved = JSON.stringify({
+      token: session.token,
+      hostToken: session.hostToken,
+      savedAt: Date.now(),
+    });
+    try {
+      hostWindow.sessionStorage.setItem(roomHostKey, saved);
+      localStorage.setItem(roomHostKey, saved);
+    } catch {}
+  }
+  function forgetRoomSession() {
+    try {
+      hostWindow.sessionStorage.removeItem(roomHostKey);
+      localStorage.removeItem(roomHostKey);
+    } catch {}
+  }
+  function rememberedRoomSession() {
+    let saved;
+    try {
+      saved = JSON.parse(
+        hostWindow.sessionStorage.getItem(roomHostKey) ||
+          localStorage.getItem(roomHostKey),
+      );
+    } catch {}
+    if (!saved?.token || !saved?.hostToken) return null;
+    if (saved.savedAt && Date.now() - saved.savedAt > 8 * 60 * 60 * 1000) {
+      forgetRoomSession();
+      return null;
+    }
+    return { ...saved, savedAt: saved.savedAt || Date.now() };
+  }
   async function endRoom() {
     try {
       await sessionRequest(`/rooms/${roomSession.token}`, {
@@ -1784,15 +1837,18 @@ export function mountPresenter({
         headers: { "X-Room-Host": roomSession.hostToken },
       });
     } catch {}
+    roomSocketGeneration += 1;
     roomSocket?.close();
     roomSocket = null;
     roomSession = null;
     audienceSession = null;
     hostWindow.clearInterval(audienceInterval);
     hostWindow.clearInterval(roomPingInterval);
+    hostWindow.clearTimeout(roomReconnectTimer);
+    hostWindow.clearTimeout(roomRestoreTimer);
     audienceInterval = 0;
     roomLatency = null;
-    hostWindow.sessionStorage.removeItem(roomHostKey);
+    forgetRoomSession();
     $("roomLiveFeed")?.remove();
     dismissPanel();
     toast("房间已结束");
@@ -1854,13 +1910,7 @@ export function mountPresenter({
           },
         });
         audienceSession = roomSession.interaction;
-        hostWindow.sessionStorage.setItem(
-          roomHostKey,
-          JSON.stringify({
-            token: roomSession.token,
-            hostToken: roomSession.hostToken,
-          }),
-        );
+        rememberRoomSession(roomSession);
         roomTab = "settings";
         connectRoom();
         ensureRoomChrome();
@@ -1873,24 +1923,31 @@ export function mountPresenter({
     };
   }
   async function restoreRoomSession() {
-    let saved;
-    try {
-      saved = JSON.parse(hostWindow.sessionStorage.getItem(roomHostKey));
-    } catch {}
-    if (!saved?.token || !saved?.hostToken) return;
+    const saved = rememberedRoomSession();
+    if (!saved) return;
     try {
       roomSession = await sessionRequest(`/rooms/${saved.token}/host`, {
         headers: { "X-Room-Host": saved.hostToken },
       });
+      rememberRoomSession(roomSession);
       audienceSession = roomSession.interaction;
       roomTab = "settings";
+      if (Number.isFinite(roomSession.page)) go(roomSession.page, false);
+      roomRestoreDelay = 700;
       connectRoom();
       ensureRoomChrome();
       startAudiencePolling();
-    } catch {
-      hostWindow.sessionStorage.removeItem(roomHostKey);
+    } catch (error) {
       roomSession = null;
       audienceSession = null;
+      if (error.status === 403) {
+        forgetRoomSession();
+        return;
+      }
+      hostWindow.clearTimeout(roomRestoreTimer);
+      const delay = roomRestoreDelay + Math.random() * 180;
+      roomRestoreDelay = Math.min(8000, roomRestoreDelay * 1.65);
+      roomRestoreTimer = hostWindow.setTimeout(restoreRoomSession, delay);
     }
   }
   function openRoom() {
@@ -2332,7 +2389,6 @@ export function mountPresenter({
       renderLiveFeed(roomFeedState || { poll: null, polls: [], comments: [] });
     } else if (!showFeed) {
       $("roomLiveFeed")?.remove();
-      document.body.classList.remove("room-feed-expanded");
     }
     applyRoomFeedPermissions(permissions);
   }
@@ -3138,6 +3194,9 @@ export function mountPresenter({
     hostWindow.clearInterval(remoteInterval);
     hostWindow.clearInterval(audienceInterval);
     hostWindow.clearInterval(roomPingInterval);
+    hostWindow.clearTimeout(roomReconnectTimer);
+    hostWindow.clearTimeout(roomRestoreTimer);
+    roomSocketGeneration += 1;
     roomSocket?.close();
     if (remoteSession)
       sessionRequest(`/presenter-sessions/${remoteSession.token}`, {
