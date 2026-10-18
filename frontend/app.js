@@ -144,7 +144,7 @@ function roomCardMarkup(room) {
       [room.permissions?.directory, "目录"],
       [room.permissions?.notes, "备注"],
       [room.permissions?.interaction, "互动"],
-      [room.permissions?.downloadPdf, "PDF"],
+      [room.permissions?.download, "导出"],
     ]
       .filter(([enabled]) => enabled)
       .map(([, label]) => `<span>${label}</span>`)
@@ -707,6 +707,12 @@ export function exportDialog(deck, { prepare = async () => deck } = {}) {
         "ZIP 内容包",
         "保留内容与素材，可重新导入并继续编辑",
       ],
+      [
+        "html",
+        "presentation",
+        "单文件网页",
+        "内含素材与放映控件，离线双击即可播放（.html）",
+      ],
       ["pdf", "notes", "PDF 文档", "便于阅读、打印和发送"],
       [
         "pptx",
@@ -729,16 +735,14 @@ export function exportDialog(deck, { prepare = async () => deck } = {}) {
         button.innerHTML = icon("loaderCircle", "spin") + "正在生成";
         try {
           const current = await prepare();
-          const blob = await api(
-            `/decks/${current.id}/export?format=${format}`,
-            {
-              responseType: "blob",
-            },
-          );
-          downloadFile(blob, current.title + "." + format);
+          const job = await api(`/decks/${current.id}/exports`, {
+            method: "POST",
+            body: { format },
+          });
+          trackExport(current, job);
           modal.removeAttribute("aria-busy");
           closeDialog();
-          toast("文件已导出");
+          toast("已在后台生成，可继续编辑或放映");
         } finally {
           modal.removeAttribute("aria-busy");
           button.textContent = "导出";
@@ -746,6 +750,57 @@ export function exportDialog(deck, { prepare = async () => deck } = {}) {
       },
     },
   );
+}
+const exportFormatNames = {
+  zip: "ZIP 内容包",
+  html: "单文件网页",
+  pdf: "PDF 文档",
+  pptx: "PowerPoint",
+};
+const exportRetentionLabel = (job) => {
+  const minutes = Number(job.retentionMinutes || 60);
+  if (minutes < 60) return `${minutes} 分钟`;
+  if (minutes < 1440) return `${minutes / 60} 小时`;
+  return `${minutes / 1440} 天`;
+};
+const exportDelay = (duration) =>
+  new Promise((resolve) => setTimeout(resolve, duration));
+function exportNotice(deck, job) {
+  let stack = document.querySelector("#exportNotifications");
+  if (!stack) {
+    stack = document.createElement("aside");
+    stack.id = "exportNotifications";
+    stack.setAttribute("aria-live", "polite");
+    document.body.append(stack);
+  }
+  const card = document.createElement("section");
+  card.className = "export-notice pending";
+  card.dataset.job = job.id;
+  card.innerHTML = `<span class="export-notice-icon">${icon("loaderCircle", "spin")}</span><div><b>${esc(exportFormatNames[job.format] || job.format)}</b><small>正在后台生成，可继续工作</small></div><button type="button" class="icon-button" aria-label="关闭提示">${icon("x")}</button>`;
+  card.querySelector("button").onclick = () => card.remove();
+  stack.append(card);
+  return card;
+}
+async function trackExport(deck, initial) {
+  const card = exportNotice(deck, initial);
+  let job = initial;
+  try {
+    while (card.isConnected && !["ready", "error"].includes(job.status)) {
+      await exportDelay(850);
+      job = await api(`/decks/${deck.id}/exports/${job.id}`);
+    }
+    if (!card.isConnected) return;
+    if (job.status === "ready") {
+      card.className = "export-notice ready";
+      card.innerHTML = `<span class="export-notice-icon">${icon("check")}</span><div><b>${esc(exportFormatNames[job.format] || job.format)}已生成</b><small>文件将在 ${exportRetentionLabel(job)}后自动清理</small></div><a class="button primary" href="${esc(job.downloadURL)}" download>下载</a><button type="button" class="icon-button" aria-label="关闭提示">${icon("x")}</button>`;
+      card.querySelector("button").onclick = () => card.remove();
+    } else throw new Error(job.error || "导出失败，请重试");
+  } catch (error) {
+    if (!card.isConnected) return;
+    card.className = "export-notice error";
+    card.innerHTML = `<span class="export-notice-icon">${icon("circleAlert")}</span><div><b>导出失败</b><small>${esc(error.message)}</small></div><button type="button" class="icon-button" aria-label="关闭提示">${icon("x")}</button>`;
+    card.querySelector("button").onclick = () => card.remove();
+  }
 }
 async function cloneTemplateDialog(id) {
   const source = decks.find((d) => d.id === id);
@@ -795,9 +850,8 @@ async function refresh() {
 }
 async function createDialog(selected = "") {
   const options = decks.filter((d) => d.kind === "template" && !d.deletedAt);
-  const { templates, templatePreview, templateContent } = await import(
-    "./templates/catalog.js"
-  );
+  const { templates, templatePreview, templateContent } =
+    await import("./templates/catalog.js");
   const option = (id, title, preview, pages) =>
     `<label class="template-option"><input type="radio" name="templateId" value="${id}" ${id === selected ? "checked" : ""}><span class="template-choice">${preview}<span class="template-caption"><strong>${esc(title)}</strong><small>${pages} 页</small></span></span></label>`;
   showDialog(
@@ -861,7 +915,7 @@ export async function shareDialog(id, onUpdated = null) {
                 ["", "长期有效"],
               ],
             },
-          )}</label></div><label>分享地址<div class="slug-prefix"><span>/s/</span><input id="shareSlug" autocapitalize="none" spellcheck="false" autocomplete="off" value="${esc(d.slug)}" maxlength="80" required></div></label><div class="share-permissions"><label class="checkbox"><input id="allowNotes" type="checkbox">允许查看备注与参考资料</label><label class="checkbox"><input id="allowDownload" type="checkbox">允许下载 PDF</label></div><button type="button" id="generateLink" class="button primary">${icon("plus")}生成分享链接</button></div>`
+          )}</label></div><label>分享地址<div class="slug-prefix"><span>/s/</span><input id="shareSlug" autocapitalize="none" spellcheck="false" autocomplete="off" value="${esc(d.slug)}" maxlength="80" required></div></label><div class="share-permissions"><label class="checkbox"><input id="allowNotes" type="checkbox">允许查看备注与参考资料</label><label class="checkbox"><input id="allowDownload" type="checkbox">允许导出</label></div><button type="button" id="generateLink" class="button primary">${icon("plus")}生成分享链接</button></div>`
     }<section class="share-list-section"><div class="share-list-head"><div><h3>分享链接</h3><p>管理链接权限与访问情况</p></div>${links.length ? `<span>${links.length} 个</span>` : ""}</div><div class="share-list">${shareItems || `<div class="share-empty">${icon("link")}<p>还没有分享链接</p><span>生成后可在这里复制、修改或撤销</span></div>`}</div></section>`,
     { className: "share-dialog" },
   );
@@ -920,7 +974,7 @@ export async function shareDialog(id, onUpdated = null) {
         const link = links.find((s) => s.id === b.dataset.renameShare);
         showDialog(
           "分享链接设置",
-          `<label>URL 名称<div class="slug-prefix"><span>/s/</span><input name="slug" autocapitalize="none" spellcheck="false" autocomplete="off" value="${esc(link.slug)}" maxlength="80" required></div></label><div class="share-permissions"><label class="checkbox"><input name="allowNotes" type="checkbox" ${link.allowNotes ? "checked" : ""}>允许查看备注</label><label class="checkbox"><input name="allowDownload" type="checkbox" ${link.allowDownload ? "checked" : ""}>允许下载 PDF</label></div>`,
+          `<label>URL 名称<div class="slug-prefix"><span>/s/</span><input name="slug" autocapitalize="none" spellcheck="false" autocomplete="off" value="${esc(link.slug)}" maxlength="80" required></div></label><div class="share-permissions"><label class="checkbox"><input name="allowNotes" type="checkbox" ${link.allowNotes ? "checked" : ""}>允许查看备注</label><label class="checkbox"><input name="allowDownload" type="checkbox" ${link.allowDownload ? "checked" : ""}>允许导出</label></div>`,
           {
             onSubmit: async (f) => {
               await api("/decks/" + id + "/shares/" + link.id, {
@@ -1004,14 +1058,6 @@ export async function deckSettingsDialog(id, onSaved = () => {}) {
     favicon = null;
     modal.querySelector("#deckIconPreview").src = site.favicon || defaultIcon;
   };
-}
-function downloadFile(blob, name) {
-  const url = URL.createObjectURL(blob),
-    a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 setupImport({
   onImported: async (d) => {

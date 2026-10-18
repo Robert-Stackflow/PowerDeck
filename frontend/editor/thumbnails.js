@@ -20,6 +20,9 @@ export function createThumbnails(container, options) {
     selected = 0,
     scheduled = 0,
     idle = 0,
+    scrolling = false,
+    settleTimer = 0,
+    resumeFrame = 0,
     destroyed = false;
   const enqueue =
     window.requestIdleCallback?.bind(window) ||
@@ -27,39 +30,73 @@ export function createThumbnails(container, options) {
   const cancelIdle = window.cancelIdleCallback?.bind(window) || clearTimeout;
   function hydrate(entry) {
     if (!entry.scene || entry.html === entry.pendingHTML) return;
-    entry.scene.innerHTML = entry.pendingHTML;
+    const template = doc.createElement("template");
+    template.innerHTML = entry.pendingHTML;
+    template.content.querySelectorAll("img").forEach((image) => {
+      image.fetchPriority = "low";
+      image.decoding = "async";
+    });
+    entry.scene.replaceChildren(template.content);
     entry.html = entry.pendingHTML;
   }
   function drain(deadline) {
     idle = 0;
-    if (destroyed || !sheet) return;
-    const start = performance.now();
+    if (destroyed || !sheet || scrolling) return;
+    if (!deadline.didTimeout && deadline.timeRemaining() < 3) {
+      idle = enqueue(drain);
+      return;
+    }
     for (const entry of pending) {
       pending.delete(entry);
+      if (!entry.scene?.isConnected) continue;
       hydrate(entry);
-      if (deadline.timeRemaining() < 2 || performance.now() - start > 5) break;
+      // HTML parsing is only part of the cost. Give style/layout/paint for this
+      // one slide a frame of their own before hydrating another complex slide.
+      break;
     }
-    if (pending.size) idle = enqueue(drain, { timeout: 120 });
+    if (pending.size)
+      resumeFrame = requestAnimationFrame(() => {
+        resumeFrame = 0;
+        if (!scrolling && !destroyed) idle = enqueue(drain);
+      });
   }
   function paint() {
     scheduled = 0;
     if (!sheet || destroyed) return;
     const scroll = container.scrollTop,
       height = container.clientHeight;
+    // One composited translation, not a transform write for every thumbnail.
+    sheet.style.transform = `translate3d(0,${-scroll}px,0)`;
+    if (scrolling) return;
     for (const entry of entries.values()) {
       if (!entry.scene || !entry.box) continue;
       const y = entry.box.top - scroll;
-      const nearby = y + entry.box.height >= -240 && y <= height + 240;
+      const nearby = y + entry.box.height >= -320 && y <= height + 320;
       if (!nearby) {
-        entry.scene.remove();
+        if (entry.scene.isConnected) entry.scene.remove();
         pending.delete(entry);
         continue;
       }
-      entry.scene.style.transform = `translate(${entry.box.left}px,${y}px)`;
       if (!entry.scene.isConnected) sheet.append(entry.scene);
       if (entry.html !== entry.pendingHTML) pending.add(entry);
     }
-    if (pending.size && !idle) idle = enqueue(drain, { timeout: 120 });
+    if (pending.size && !idle && !resumeFrame) idle = enqueue(drain);
+  }
+  function onScroll() {
+    scrolling = true;
+    cancelIdle(idle);
+    idle = 0;
+    cancelAnimationFrame(resumeFrame);
+    resumeFrame = 0;
+    clearTimeout(settleTimer);
+    schedulePaint();
+    settleTimer = setTimeout(finishScroll, 100);
+  }
+  function finishScroll() {
+    clearTimeout(settleTimer);
+    if (destroyed) return;
+    scrolling = false;
+    schedulePaint();
   }
   function schedulePaint() {
     if (!scheduled) scheduled = requestAnimationFrame(paint);
@@ -84,9 +121,11 @@ export function createThumbnails(container, options) {
     });
     frame.style.width = container.clientWidth + "px";
     frame.style.height = container.clientHeight + "px";
+    sheet.style.height = container.scrollHeight + "px";
     for (const { entry, box } of boxes) {
       entry.box = box;
       if (!entry.scene) continue;
+      entry.scene.style.transform = `translate(${box.left}px,${box.top}px)`;
       entry.scene.style.width = box.width + "px";
       entry.scene.style.height = box.height + "px";
       entry.scene.style.setProperty(
@@ -96,9 +135,47 @@ export function createThumbnails(container, options) {
     }
     schedulePaint();
   }
+  function revealSelected() {
+    const button = entries.get(currentList[selected]?.id)?.button;
+    if (!button) return;
+    const box = button.getBoundingClientRect(),
+      viewport = container.getBoundingClientRect();
+    if (box.top < viewport.top + 8)
+      container.scrollTop += box.top - viewport.top - 8;
+    else if (box.bottom > viewport.bottom - 8)
+      container.scrollTop += box.bottom - viewport.bottom + 8;
+    schedulePaint();
+  }
   function render(list, index) {
+    const previous = currentList[selected]?.id,
+      changedPage = previous !== list[index]?.id,
+      sameContent =
+        list.length === currentList.length &&
+        list.every(
+          (page, i) =>
+            page.id === currentList[i].id &&
+            page.html === currentList[i].html &&
+            page.title === currentList[i].title,
+        ),
+      sameOrder =
+        list.length === currentList.length &&
+        list.every((page, i) => page.id === currentList[i].id);
     currentList = list;
     selected = index;
+    if (
+      sameContent &&
+      (!sheet || list.every((page) => entries.get(page.id)?.scene))
+    ) {
+      if (changedPage) {
+        entries.get(previous)?.button.setAttribute("aria-current", "false");
+        entries
+          .get(list[index]?.id)
+          ?.button.setAttribute("aria-current", "page");
+        revealSelected();
+      }
+      return;
+    }
+    let needsLayout = !sameOrder;
     const keys = new Set(list.map((page) => page.id));
     for (const [key, entry] of entries)
       if (!keys.has(key)) {
@@ -132,16 +209,23 @@ export function createThumbnails(container, options) {
       entry.button.setAttribute("aria-current", i === index ? "page" : "false");
       entry.number.textContent = i + 1;
       if (sheet && !entry.scene) {
+        needsLayout = true;
         entry.scene = doc.createElement("div");
         entry.scene.className = "thumbnail-scene";
       }
       entry.pendingHTML = page.html;
     });
-    layout();
+    if (needsLayout) layout();
+    else schedulePaint();
+    if (changedPage) revealSelected();
   }
   function load(css) {
     doc = sheet = null;
     pending.clear();
+    clearTimeout(settleTimer);
+    scrolling = false;
+    cancelAnimationFrame(resumeFrame);
+    resumeFrame = 0;
     cancelIdle(idle);
     idle = 0;
     for (const entry of entries.values()) {
@@ -154,7 +238,7 @@ export function createThumbnails(container, options) {
       doc.body.innerHTML = '<div id="thumbnailSheet"></div>';
       sheet = doc.querySelector("#thumbnailSheet");
       const style = doc.createElement("style");
-      style.textContent = `html,body{background:transparent!important;overflow:hidden!important}#thumbnailSheet{position:relative;width:100%;height:100%;contain:strict}.thumbnail-scene{position:absolute;left:0;top:0;overflow:hidden;border-radius:7px;contain:strict;pointer-events:none}.thumbnail-scene>.slide{position:absolute!important;inset:0!important;display:block!important;width:${options.width}px!important;height:${options.height}px!important;transform:scale(var(--thumbnail-scale))!important;transform-origin:0 0!important}*{animation:none!important;transition:none!important}`;
+      style.textContent = `html,body{background:transparent!important;overflow:hidden!important}#thumbnailSheet{position:relative;width:100%;contain:strict;will-change:transform}.thumbnail-scene{position:absolute;left:0;top:0;overflow:hidden;border-radius:7px;contain:strict;pointer-events:none}.thumbnail-scene>.slide{position:absolute!important;inset:0!important;display:block!important;width:${options.width}px!important;height:${options.height}px!important;transform:scale(var(--thumbnail-scale))!important;transform-origin:0 0!important}*{animation:none!important;transition:none!important}`;
       doc.head.append(style);
       render(currentList, selected);
       doc.fonts.ready.then(layout);
@@ -168,7 +252,7 @@ export function createThumbnails(container, options) {
   }
   const observer = new ResizeObserver(layout);
   observer.observe(container);
-  container.addEventListener("scroll", schedulePaint, { passive: true });
+  container.addEventListener("scroll", onScroll, { passive: true });
   load(options.css);
   return {
     render,
@@ -178,7 +262,9 @@ export function createThumbnails(container, options) {
       observer.disconnect();
       cancelAnimationFrame(scheduled);
       cancelIdle(idle);
-      container.removeEventListener("scroll", schedulePaint);
+      clearTimeout(settleTimer);
+      cancelAnimationFrame(resumeFrame);
+      container.removeEventListener("scroll", onScroll);
       frame.remove();
       entries.clear();
       pending.clear();

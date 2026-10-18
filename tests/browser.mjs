@@ -87,7 +87,7 @@ try {
     async () => {
       await p.locator("#newBtn").click();
       await p.locator("#dialog input[name=title]").fill("浏览器测试演示");
-      await p.getByRole("button", { name: "创建演示", exact: true }).click();
+      await p.locator("#dialog button[type=submit]").click();
       await p.waitForURL("**/edit/*");
       createdId = p.url().split("/").at(-1);
       await p.locator('[data-editor-mode="source"]').click();
@@ -141,9 +141,12 @@ try {
     await pause(160);
     const card = p.locator(`[data-id="${createdId}"]`).first();
     await card.locator("summary").click();
-    const downloaded = p.waitForEvent("download");
     await card.locator("[data-action=export]").click();
     await p.locator("#dialog button[type=submit]").click();
+    const ready = p.locator(".export-notice.ready");
+    await ready.waitFor({ timeout: 15000 });
+    const downloaded = p.waitForEvent("download");
+    await ready.locator("a").click();
     const download = await downloaded,
       pack = await importPackageArchive(fs.readFileSync(await download.path()));
     assert(download.suggestedFilename().endsWith(".zip"));
@@ -158,7 +161,7 @@ try {
     "permission dialog creates a read-only link with separate visitor access",
     async () => {
       await p.locator(`[data-action=share][data-id="${createdId}"]`).click();
-      await p.getByRole("combobox", { name: "访问权限" }).click();
+      await p.locator("#visibilityTrigger").click();
       await p
         .getByRole("option", {
           name: "链接分享 · 持有有效链接者可见",
@@ -195,7 +198,7 @@ try {
       );
       assert(!JSON.stringify(raw).includes("私密备注"));
       await p.locator("[data-revoke]").first().click();
-      await p.locator(".status-off").waitFor();
+      await p.locator(".share-status", { hasText: "已撤销" }).waitFor();
       await guest.waitForFunction(
         () => !document.querySelector("#error").hidden,
         {},

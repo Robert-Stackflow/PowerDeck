@@ -2,6 +2,13 @@ import { parseSlides, visualDocument, cloneWithFreshIds } from "./document.js";
 import { shapeMarkup, shapes, safeLink } from "./shapes.js";
 import { createGuides } from "./guides.js";
 import { wheelNavigation } from "../components/wheel-navigation.js";
+import { createCanvasClipboard } from "./clipboard.js";
+import { imageSize } from "./image-size.js";
+import {
+  deferSlideImages,
+  loadSlideImages,
+  waitForSlideImages,
+} from "../player/media.js";
 
 const atomic = ".math,[data-tex],.katex,svg,img,video,audio,canvas";
 const textTags = "h1,h2,h3,h4,h5,h6,p,li,td,th,figcaption,blockquote";
@@ -16,6 +23,7 @@ export async function createCanvas({
   meta,
   baseCSS,
   baseURL,
+  initialPage = 1,
   onChange,
   onDirty,
   onSelect,
@@ -28,6 +36,8 @@ export async function createCanvas({
   onPointerDown = () => {},
   onLinkRequest = () => {},
   onFormulaRequest = () => {},
+  onPasteImages = async () => [],
+  onError = () => {},
 }) {
   let doc,
     win,
@@ -38,30 +48,42 @@ export async function createCanvas({
     editing = null,
     drag = null,
     composing = false,
+    marqueeContainment = true,
     guides;
-  let current = 0,
+  let current = Math.max(0, Math.trunc(initialPage) - 1),
     scale = 1,
     undoIndex = -1,
     history = [],
     historyBytes = 0,
     activeSlide = null;
+  let marqueeBox,
+    dragFrame = 0,
+    pendingMove = null;
   let pageCache = new WeakMap();
   let pageNotes = [],
     observer;
   const slides = () =>
     [...deck.children].filter((node) => node.classList.contains("slide"));
   const slide = () => slides()[current];
-  const layerNodes = () =>
-    [
-      ...slide().querySelectorAll(
-        "[data-editor-element],h1,h2,h3,h4,h5,h6,p,blockquote,img,svg,video,audio,canvas,.math,[data-tex]",
-      ),
-    ].filter((node) => {
-      const component = node.parentElement?.closest(
-        "[data-editor-element],.math,[data-tex],svg",
-      );
-      return !component || component === node;
-    });
+  // Build every interaction feature from the same component discovery rule.
+  // A deck can contain useful editable cards without data-editor-element (for
+  // example `.stack > div`). They were clickable through pick(), but used to
+  // be invisible to marquee selection, the layer list and smart guides.
+  const layerNodes = () => {
+    const discovered = new Set();
+    for (const element of slide().querySelectorAll(
+      `[data-editor-element],${textTags},img,svg,video,audio,canvas,.math,[data-tex],div,span,strong,em,b,i,u,s,a,small,sub,sup,mark`,
+    )) {
+      const node = pick(element);
+      if (node) discovered.add(node);
+    }
+    return [...discovered].filter(
+      (node) =>
+        ![...discovered].some(
+          (other) => other !== node && other.contains(node),
+        ),
+    );
+  };
   function layerLabel(node, index) {
     const text = node.textContent?.replace(/\s+/g, " ").trim();
     if (node.matches("img")) return node.alt || `图片 ${index + 1}`;
@@ -88,10 +110,40 @@ export async function createCanvas({
       const id =
         node.dataset.slideId ||
         (node.dataset.slideId = "slide-" + crypto.randomUUID().slice(0, 12));
-      let content = node;
+      // Restore deferred URLs in an inert template, never in a live clone:
+      // serializing/saving must not fetch other pages or persist runtime flags.
+      const template = doc.createElement("template");
+      template.innerHTML = node.outerHTML;
+      const content = template.content.firstElementChild;
+      for (const [attr, stored] of [
+        ["src", "data-player-src"],
+        ["srcset", "data-player-srcset"],
+        ["href", "data-player-href"],
+        ["xlink:href", "data-player-xlink-href"],
+      ]) {
+        content.querySelectorAll(`[${stored}]`).forEach((image) => {
+          if (attr === "xlink:href")
+            image.setAttributeNS(
+              "http://www.w3.org/1999/xlink",
+              attr,
+              image.getAttribute(stored),
+            );
+          else image.setAttribute(attr, image.getAttribute(stored));
+          image.removeAttribute(stored);
+        });
+      }
+      content.querySelectorAll("[data-ve-image-options]").forEach((image) => {
+        const original = JSON.parse(
+          image.getAttribute("data-ve-image-options"),
+        );
+        for (const [name, value] of Object.entries(original))
+          value === null
+            ? image.removeAttribute(name)
+            : image.setAttribute(name, value);
+        image.removeAttribute("data-ve-image-options");
+      });
       // Snapshot a clone while typing; never blur the live node or move its caret.
       if (editing && node.contains(editing.node)) {
-        content = node.cloneNode(true);
         const text = content.querySelector("[data-ve-editing]");
         for (const key of ["contenteditable", "spellcheck"])
           editing[key] === null
@@ -113,11 +165,15 @@ export async function createCanvas({
     slides()
       .map((node) => cachedPage(node).html)
       .join("\n");
-  const snapshot = () => ({
-    pages: slides().map(cachedPage),
-    notes: pageNotes.slice(),
-    current,
-  });
+  const snapshot = () => {
+    const pages = slides().map(cachedPage);
+    return {
+      pages,
+      notes: pageNotes.slice(),
+      current,
+      activePageId: pages[current]?.id || null,
+    };
+  };
   function pagesChanged() {
     onPages(
       slides().map((el, i) => ({
@@ -162,8 +218,9 @@ export async function createCanvas({
     pagesChanged();
   }
   function boxUpdate() {
-    selectionBox.hidden = !selected || !!editing;
-    if (!selected || editing) return;
+    deck?.toggleAttribute("data-ve-multi", selectedNodes.size > 1 && !editing);
+    selectionBox.hidden = !selected || !!editing || drag?.kind === "marquee";
+    if (!selected || editing || drag?.kind === "marquee") return;
     const boxes = [...selectedNodes].map((node) =>
         node.getBoundingClientRect(),
       ),
@@ -278,6 +335,14 @@ export async function createCanvas({
     onSelect(info());
     layersChanged();
   }
+  function markSelection(nodes) {
+    for (const node of selectedNodes)
+      if (!nodes.has(node)) node.removeAttribute("data-ve-selected");
+    for (const node of nodes)
+      if (!selectedNodes.has(node)) node.setAttribute("data-ve-selected", "");
+    selectedNodes = nodes;
+    selected = [...nodes].at(-1) || null;
+  }
   function canEdit(node) {
     if (
       !node ||
@@ -328,8 +393,11 @@ export async function createCanvas({
   }
   function pick(target) {
     if (!target || target === slide() || !slide().contains(target)) return null;
+    if (target.closest("style,script,template,link,meta")) return null;
+    const group = target.closest('[data-editor-element="group"]');
+    if (group) return group;
     const component = target.closest(
-      "[data-editor-element=text],[data-editor-element=shape]",
+      "[data-editor-element=text],[data-editor-element=shape],[data-editor-element=chart]",
     );
     if (component) return component;
     const math = target.closest(".math,[data-tex]") || target.closest(".katex");
@@ -338,7 +406,43 @@ export async function createCanvas({
     if (graphic) return graphic;
     const paragraph = target.closest(textTags);
     if (paragraph && canEdit(paragraph)) return paragraph;
-    return target;
+    const table = target.closest('[data-editor-element="table"]');
+    if (table) return table;
+    // Unmarked text (e.g. a cover's year/author or `.stack > div`) remains
+    // editable. If the pointer lands on a nested <small>/<span>, promote it to
+    // the visually self-contained parent card instead of treating the nested
+    // text run as a separate component.
+    let fallback = null;
+    for (
+      let candidate = target;
+      candidate && candidate !== slide();
+      candidate = candidate.parentElement
+    ) {
+      if (
+        candidate.matches("main,header,footer,section,article,aside,nav,figure")
+      )
+        break;
+      const directText = [...candidate.childNodes].some(
+          (node) => node.nodeType === 3 && node.textContent.trim(),
+        ),
+        inlineText =
+          candidate.textContent.trim() &&
+          [...candidate.children].every((node) =>
+            /^(SPAN|STRONG|EM|B|I|U|S|BR|A|SMALL|SUB|SUP|MARK)$/.test(
+              node.tagName,
+            ),
+          );
+      if (!(directText || inlineText) || !canEdit(candidate)) continue;
+      fallback ||= candidate;
+      const style = win.getComputedStyle(candidate),
+        surfaced =
+          style.position === "absolute" ||
+          style.position === "fixed" ||
+          style.backgroundColor !== "rgba(0, 0, 0, 0)" ||
+          parseFloat(style.borderTopWidth) > 0;
+      if (surfaced) return candidate;
+    }
+    return fallback;
   }
   function fit() {
     if (!win || !deck) return;
@@ -350,6 +454,7 @@ export async function createCanvas({
       ),
     );
     deck.style.setProperty("--ve-scale", scale);
+    guides?.refresh();
     boxUpdate();
   }
   function translations(node) {
@@ -381,15 +486,48 @@ export async function createCanvas({
     onPointerDown();
     if (event.button !== 0 || editing?.node.contains(event.target)) return;
     if (event.target.closest("#ve-selection")) return;
+    // preventDefault below suppresses native focus; explicitly focus the canvas
+    // so OS copy/paste and keyboard events reach this iframe after selection.
+    doc.body.focus({ preventScroll: true });
     const node = pick(event.target);
+    const candidates = layerNodes();
     if (
-      !(
-        node &&
-        !event.shiftKey &&
-        selectedNodes.size > 1 &&
-        selectedNodes.has(node)
-      )
-    )
+      !node ||
+      (!candidates.includes(node) &&
+        candidates.some((item) => node.contains(item)))
+    ) {
+      event.preventDefault();
+      finishEdit();
+      const previous = new Set(selectedNodes);
+      drag = {
+        kind: "marquee",
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        changed: false,
+        previous,
+        base: event.shiftKey ? previous : new Set(),
+        candidates: candidates
+          .filter((item) => !item.closest('[data-editor-locked="true"]'))
+          .map((item) => ({ node: item, box: item.getBoundingClientRect() }))
+          .filter(
+            (item) =>
+              item.box.width > 0 &&
+              item.box.height > 0 &&
+              win.getComputedStyle(item.node).visibility !== "hidden",
+          ),
+      };
+      if (!event.shiftKey) markSelection(new Set());
+      boxUpdate();
+      doc.documentElement.setPointerCapture(event.pointerId);
+      return;
+    }
+    if (!(
+      node &&
+      !event.shiftKey &&
+      selectedNodes.size > 1 &&
+      selectedNodes.has(node)
+    ))
       select(node, event.shiftKey);
     if (!node) return;
     if (!selectedNodes.has(node)) return;
@@ -398,7 +536,6 @@ export async function createCanvas({
     event.preventDefault();
     if (event.detail >= 2) return;
     const origin = translations(node);
-    guides.begin(node);
     drag = {
       node,
       nodes: [...selectedNodes].map((item) => ({
@@ -427,7 +564,7 @@ export async function createCanvas({
     event.stopPropagation();
     finishEdit();
     const r = selected.getBoundingClientRect();
-    guides.begin(selected);
+    guides.begin(selectedNodes);
     drag = {
       node: selected,
       pointerId: event.pointerId,
@@ -444,25 +581,75 @@ export async function createCanvas({
   }
   function dragMove(event) {
     if (!drag || drag.pointerId !== event.pointerId) return;
+    pendingMove = event;
+    if (!dragFrame)
+      dragFrame = win.requestAnimationFrame(() => {
+        dragFrame = 0;
+        const last = pendingMove;
+        pendingMove = null;
+        if (last) applyDragMove(last);
+      });
+  }
+  function applyDragMove(event) {
+    if (!drag || drag.pointerId !== event.pointerId) return;
     let dx = (event.clientX - drag.startX) / scale,
       dy = (event.clientY - drag.startY) / scale;
     if (!drag.changed && Math.hypot(dx, dy) * scale < 3) return;
-    if (!drag.changed) doc.documentElement.setPointerCapture(event.pointerId);
+    if (!drag.changed) {
+      doc.documentElement.setPointerCapture(event.pointerId);
+      if (drag.kind === "move") guides.begin(selectedNodes);
+    }
     drag.changed = true;
+    if (drag.kind === "marquee") {
+      const left = Math.min(drag.startX, event.clientX),
+        top = Math.min(drag.startY, event.clientY),
+        right = Math.max(drag.startX, event.clientX),
+        bottom = Math.max(drag.startY, event.clientY);
+      marqueeBox.hidden = false;
+      Object.assign(marqueeBox.style, {
+        left: left + "px",
+        top: top + "px",
+        width: right - left + "px",
+        height: bottom - top + "px",
+      });
+      const nodes = new Set(drag.base);
+      for (const { node, box } of drag.candidates)
+        if (
+          marqueeContainment
+            ? box.left >= left &&
+              box.right <= right &&
+              box.top >= top &&
+              box.bottom <= bottom
+            : box.right > left &&
+              box.left < right &&
+              box.bottom > top &&
+              box.top < bottom
+        )
+          nodes.add(node);
+      markSelection(nodes);
+      return;
+    }
     if (drag.kind === "move") {
       if (event.shiftKey) Math.abs(dx) > Math.abs(dy) ? (dy = 0) : (dx = 0);
       ({ dx, dy } = guides.snap(dx, dy, event));
       for (const item of drag.nodes || [drag])
         move(item.node, dx, dy, item.origin);
     } else {
-      if (!drag.node.matches("img,svg") && !event.shiftKey)
-        ({ dx, dy } = guides.snap(dx, dy, event, drag.kind));
       const left = drag.kind.includes("w"),
         top = drag.kind.includes("n");
       let width = Math.max(16, drag.width + (left ? -dx : dx)),
         height = Math.max(16, drag.height + (top ? -dy : dy));
-      if (drag.node.matches("img,svg") || event.shiftKey)
-        height = (width * drag.height) / drag.width;
+      const preserveRatio = drag.node.matches("img,svg") || event.shiftKey;
+      if (preserveRatio) height = (width * drag.height) / drag.width;
+      const snapped = guides.resize(
+        width,
+        height,
+        drag.kind,
+        event,
+        preserveRatio,
+      );
+      width = Math.max(16, snapped.width);
+      height = Math.max(16, snapped.height);
       setStyle(drag.node, {
         width: width + "px",
         height: height + "px",
@@ -473,23 +660,30 @@ export async function createCanvas({
         boxSizing: "border-box",
         flexShrink: "0",
       });
-      move(
-        drag.node,
-        left ? drag.width - width : 0,
-        top ? drag.height - height : 0,
-        drag.origin,
-      );
+      move(drag.node, snapped.offsetX, snapped.offsetY, drag.origin);
     }
     onDirty();
     boxUpdate();
   }
   function dragEnd(event, cancel = false) {
     if (!drag || (event && drag.pointerId !== event.pointerId)) return;
+    win.cancelAnimationFrame(dragFrame);
+    dragFrame = 0;
+    if (!cancel && pendingMove) applyDragMove(pendingMove);
+    pendingMove = null;
     const last = drag;
     drag = null;
     guides.clear();
     if (doc.documentElement.hasPointerCapture(last.pointerId))
       doc.documentElement.releasePointerCapture(last.pointerId);
+    if (last.kind === "marquee") {
+      marqueeBox.hidden = true;
+      if (cancel) markSelection(last.previous);
+      boxUpdate();
+      onSelect(info());
+      layersChanged();
+      return;
+    }
     if (cancel)
       for (const item of last.nodes || [last])
         item.style === null
@@ -550,12 +744,25 @@ export async function createCanvas({
       fragment.append(doc.createTextNode(line));
     });
     const last = fragment.lastChild;
+    if (!last) return;
     range.insertNode(fragment);
     range.setStartAfter(last);
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
+    pageCache.delete(slide());
     onDirty();
+  }
+  function commitPaste(nodes, target) {
+    if (!deck.contains(target)) return;
+    target.append(...nodes);
+    pageCache.delete(target);
+    if (target === slide() && !editing && !drag) {
+      markSelection(new Set(nodes));
+      boxUpdate();
+      onSelect(info());
+    }
+    pushHistory(false);
   }
   function setStyle(node, values) {
     for (const [key, value] of Object.entries(values))
@@ -684,11 +891,11 @@ export async function createCanvas({
     finishEdit();
     dragEnd(null);
     current = clamp(index, 0, slides().length - 1);
-    selected = null;
-    selectedNodes.clear();
+    markSelection(new Set());
     if (activeSlide !== slide()) {
       activeSlide?.removeAttribute("data-ve-current");
       activeSlide = slide();
+      activateImages(activeSlide);
       activeSlide.setAttribute("data-ve-current", "");
     }
     boxUpdate();
@@ -699,6 +906,12 @@ export async function createCanvas({
     finishEdit();
     const index = undoIndex + step;
     if (index < 0 || index >= history.length) return;
+    // Undo focuses the page where the action being undone was made; redo
+    // focuses the page restored by the target history entry. Keeping this
+    // separate from the target snapshot prevents undoing a change on page B
+    // from immediately jumping to page A just because A was active before it.
+    const action = step < 0 ? history[undoIndex] : history[index],
+      focusPageId = action.activePageId || action.pages[action.current]?.id;
     undoIndex = index;
     const value = history[index],
       existing = new Map(slides().map((node) => [cachedPage(node).id, node]));
@@ -706,7 +919,7 @@ export async function createCanvas({
       let node = existing.get(page.id);
       if (!node || cachedPage(node).html !== page.html) {
         const template = doc.createElement("template");
-        template.innerHTML = page.html;
+        template.innerHTML = deferSlideImages(page.html, doc);
         const replacement = template.content.firstElementChild;
         if (node) node.replaceWith(replacement);
         node = replacement;
@@ -718,7 +931,11 @@ export async function createCanvas({
     });
     for (const node of existing.values()) node.remove();
     pageNotes = value.notes.slice();
-    go(value.current);
+    const restoredPages = slides(),
+      focusIndex = restoredPages.findIndex(
+        (node) => cachedPage(node).id === focusPageId,
+      );
+    go(focusIndex >= 0 ? focusIndex : value.current);
     onHistory(index > 0, index < history.length - 1);
     onChange({ html: serialize(), notes: getNotes() });
   }
@@ -875,8 +1092,9 @@ export async function createCanvas({
     onCSSChange(css);
     onDirty();
   }
-  function insert(kind, src) {
+  async function insert(kind, src) {
     finishEdit();
+    const target = slide();
     const node = doc.createElement(
       kind === "image"
         ? "img"
@@ -906,15 +1124,7 @@ export async function createCanvas({
     } else if (kind === "image") {
       node.src = src;
       node.alt = "";
-      Object.assign(styles, {
-        width: "480px",
-        height: "320px",
-        objectFit: "contain",
-      });
-      node.onload = () => {
-        boxUpdate();
-        onSelect(info());
-      };
+      Object.assign(styles, await imageSize(node));
     } else if (kind === "video" || kind === "audio") {
       node.src = src;
       node.controls = true;
@@ -978,6 +1188,10 @@ export async function createCanvas({
       node.style.setProperty("--shape-stroke", "#658e7c");
     }
     setStyle(node, styles);
+    if (kind === "image") {
+      commitPaste([node], target);
+      return;
+    }
     slide().append(node);
     select(node);
     pushHistory();
@@ -1087,6 +1301,39 @@ export async function createCanvas({
     boxUpdate();
     onSelect(info());
   }
+  function distributeSelection(axis) {
+    finishEdit();
+    const nodes = [...selectedNodes];
+    if (nodes.length < 3) return;
+    const horizontal = axis === "horizontal",
+      entries = nodes
+        .map((node) => ({ node, box: node.getBoundingClientRect() }))
+        .sort((a, b) =>
+          horizontal ? a.box.left - b.box.left : a.box.top - b.box.top,
+        ),
+      first = entries[0].box,
+      last = entries.at(-1).box,
+      span = horizontal ? last.right - first.left : last.bottom - first.top,
+      occupied = entries.reduce(
+        (sum, entry) => sum + (horizontal ? entry.box.width : entry.box.height),
+        0,
+      ),
+      gap = (span - occupied) / (entries.length - 1);
+    let cursor = horizontal ? first.right + gap : first.bottom + gap;
+    for (const entry of entries.slice(1, -1)) {
+      const current = horizontal ? entry.box.left : entry.box.top,
+        delta = cursor - current;
+      move(
+        entry.node,
+        horizontal ? delta / scale : 0,
+        horizontal ? 0 : delta / scale,
+      );
+      cursor += (horizontal ? entry.box.width : entry.box.height) + gap;
+    }
+    pushHistory();
+    boxUpdate();
+    onSelect(info());
+  }
   function selectLayer(index, additive = false) {
     select(layerNodes()[index] || null, additive);
   }
@@ -1178,6 +1425,7 @@ export async function createCanvas({
   }
   async function load(value) {
     finishEdit();
+    if (drag) dragEnd(null, true);
     const nodes = parseSlides(value.html);
     delete frame.dataset.ready;
     css = value.css;
@@ -1196,7 +1444,7 @@ export async function createCanvas({
         if (frame.contentDocument?.querySelector("#deck")) resolve();
       };
       frame.srcdoc = visualDocument({
-        html: nodes.map((node) => node.outerHTML).join("\n"),
+        html: deferSlideImages(nodes.map((node) => node.outerHTML).join("\n")),
         css,
         baseCSS,
         baseURL,
@@ -1205,11 +1453,20 @@ export async function createCanvas({
     });
     win = frame.contentWindow;
     doc = frame.contentDocument;
+    doc.body.tabIndex = -1;
     deck = doc.querySelector("#deck");
     guides?.destroy();
-    guides = createGuides(doc, meta, () => scale, slide);
+    guides = createGuides(doc, meta, () => scale, slide, layerNodes);
     updateTheme();
-    pageCache = new WeakMap();
+    pageCache = new WeakMap(
+      slides().map((node, index) => [
+        node,
+        {
+          id: node.dataset.slideId,
+          html: nodes[index].outerHTML,
+        },
+      ]),
+    );
     activeSlide = null;
     selected = null;
     selectedNodes.clear();
@@ -1225,6 +1482,19 @@ export async function createCanvas({
       )
       .join("");
     doc.body.append(selectionBox);
+    marqueeBox = doc.createElement("div");
+    marqueeBox.id = "ve-marquee";
+    marqueeBox.hidden = true;
+    marqueeBox.setAttribute("aria-hidden", "true");
+    Object.assign(marqueeBox.style, {
+      position: "fixed",
+      pointerEvents: "none",
+      zIndex: "2147483647",
+      border: "1px solid #3c8a72",
+      background: "#3c8a7214",
+      boxSizing: "border-box",
+    });
+    doc.body.append(marqueeBox);
     selectionBox.addEventListener("pointerdown", startResize);
     doc.addEventListener("pointerdown", down);
     doc.addEventListener("contextmenu", (event) => {
@@ -1270,6 +1540,22 @@ export async function createCanvas({
       }
     });
     doc.addEventListener("paste", paste);
+    const clipboard = createCanvasClipboard({
+      doc,
+      baseURL,
+      getSlide: slide,
+      getSelected: () => selectedNodes,
+      isEditing: () => !!editing,
+      getScale: () => scale,
+      setStyle,
+      commit: commitPaste,
+      remove: deleteSelection,
+      uploadImages: onPasteImages,
+      onError,
+    });
+    doc.addEventListener("copy", clipboard.copy);
+    doc.addEventListener("cut", clipboard.copy);
+    doc.addEventListener("paste", clipboard.paste);
     doc.addEventListener("focusout", (event) => {
       if (editing && event.target === editing.node) finishEdit();
     });
@@ -1314,8 +1600,14 @@ export async function createCanvas({
     observer = new ResizeObserver(fit);
     observer.observe(frame);
     fit();
+    guides.refresh();
     go(Math.min(current, nodes.length - 1));
-    await doc.fonts.ready;
+    let readyTimer;
+    await Promise.race([
+      Promise.all([doc.fonts.ready, waitForSlideImages(slide())]),
+      new Promise((resolve) => (readyTimer = setTimeout(resolve, 1800))),
+    ]);
+    clearTimeout(readyTimer);
     fit();
     await new Promise((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(resolve)),
@@ -1324,6 +1616,23 @@ export async function createCanvas({
     history = [snapshot()];
     undoIndex = 0;
     onHistory(false, false);
+  }
+  function activateImages(page) {
+    for (const image of page.querySelectorAll("img")) {
+      if (!image.hasAttribute("data-ve-image-options"))
+        image.setAttribute(
+          "data-ve-image-options",
+          JSON.stringify(
+            Object.fromEntries(
+              ["fetchpriority", "decoding", "loading"].map((name) => [
+                name,
+                image.getAttribute(name),
+              ]),
+            ),
+          ),
+        );
+    }
+    loadSlideImages(page);
   }
   function updateTheme() {
     doc?.documentElement.style.setProperty(
@@ -1390,10 +1699,15 @@ export async function createCanvas({
     pageAction,
     movePage,
     alignSelection,
+    distributeSelection,
     selectLayer,
     reorderLayer,
     setFormula,
     setSnapping: (enabled) => guides.setEnabled(enabled),
+    setMarqueeContainment: (enabled) => (marqueeContainment = !!enabled),
+    setGuideOptions: (options) => guides.setOptions(options),
+    addGuide: (axis) => guides.addGuide(axis),
+    clearGuides: () => guides.clearCustomGuides(),
     setLink,
     updateProperties,
     keyboard,
@@ -1451,6 +1765,8 @@ export async function createCanvas({
       pushHistory(false);
     },
     destroy: () => {
+      if (drag) dragEnd(null, true);
+      win?.cancelAnimationFrame(dragFrame);
       observer?.disconnect();
       guides?.destroy();
       window.removeEventListener("themechange", updateTheme);

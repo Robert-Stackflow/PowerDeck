@@ -1,6 +1,7 @@
 import { api, esc, fileBase64, session } from "./api.js";
 import { icon } from "./icons.js";
 import { selectMarkup, enhanceSelects } from "./components/select.js";
+import { site, setSite } from "./branding.js";
 import {
   colorField,
   createColorPicker,
@@ -18,6 +19,21 @@ const roleOptions = [
   ["reviewer", "审阅者"],
   ["viewer", "查看者"],
 ];
+const exportCacheOptions = [
+  ["5", "5 分钟"],
+  ["30", "30 分钟"],
+  ["60", "1 小时"],
+  ["360", "6 小时"],
+  ["720", "12 小时"],
+  ["1440", "24 小时"],
+  ["10080", "7 天"],
+];
+const exportFormatNames = {
+  zip: "ZIP 内容包",
+  pdf: "PDF 文档",
+  pptx: "PowerPoint",
+  html: "单文件网页",
+};
 const formatSize = (bytes) =>
   bytes >= 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -26,12 +42,12 @@ const formatDate = (value) => new Date(value).toLocaleString("zh-CN");
 
 export const platformSettingsNav = (active) =>
   session.role === "owner"
-    ? `<button class="nav-item ${active === "brand" ? "active" : ""}" data-settings-tab="brand" aria-pressed="${active === "brand"}">${icon("image")}品牌与素材</button><button class="nav-item ${active === "team" ? "active" : ""}" data-settings-tab="team" aria-pressed="${active === "team"}">${icon("group")}成员与权限</button><button class="nav-item ${active === "backup" ? "active" : ""}" data-settings-tab="backup" aria-pressed="${active === "backup"}">${icon("save")}备份中心</button>`
+    ? `<button class="nav-item ${active === "brand" ? "active" : ""}" data-settings-tab="brand" aria-pressed="${active === "brand"}">${icon("image")}品牌与素材</button><button class="nav-item ${active === "team" ? "active" : ""}" data-settings-tab="team" aria-pressed="${active === "team"}">${icon("group")}成员与权限</button><button class="nav-item ${active === "cache" ? "active" : ""}" data-settings-tab="cache" aria-pressed="${active === "cache"}">${icon("database")}缓存管理</button><button class="nav-item ${active === "backup" ? "active" : ""}" data-settings-tab="backup" aria-pressed="${active === "backup"}">${icon("save")}备份中心</button>`
     : "";
 
 export const platformSettingsPanels = (active) =>
   session.role === "owner"
-    ? `<section id="brandSettings" data-settings-panel="brand" ${active !== "brand" ? "hidden" : ""}></section><section id="teamSettings" data-settings-panel="team" ${active !== "team" ? "hidden" : ""}></section><section id="backupSettings" data-settings-panel="backup" ${active !== "backup" ? "hidden" : ""}></section>`
+    ? `<section id="brandSettings" data-settings-panel="brand" ${active !== "brand" ? "hidden" : ""}></section><section id="teamSettings" data-settings-panel="team" ${active !== "team" ? "hidden" : ""}></section><section id="cacheSettings" data-settings-panel="cache" ${active !== "cache" ? "hidden" : ""}></section><section id="backupSettings" data-settings-panel="backup" ${active !== "backup" ? "hidden" : ""}></section>`
     : "";
 
 export async function mountPlatformSettings(
@@ -41,7 +57,10 @@ export async function mountPlatformSettings(
   if (session.role !== "owner") return;
   const brandPanel = main.querySelector("#brandSettings"),
     teamPanel = main.querySelector("#teamSettings"),
+    cachePanel = main.querySelector("#cacheSettings"),
     backupPanel = main.querySelector("#backupSettings");
+  let cacheRefreshTimer = 0,
+    cacheFilter = {};
 
   async function renderBrand() {
     const [kit, assetResult] = await Promise.all([
@@ -264,5 +283,157 @@ export async function mountPlatformSettings(
     );
   }
 
-  await Promise.all([renderBrand(), renderTeam(), renderBackups()]);
+  async function renderCache(filter = {}) {
+    cacheFilter = {
+      deckId: String(filter.deckId || ""),
+      version: String(filter.version || ""),
+    };
+    clearTimeout(cacheRefreshTimer);
+    const query = new URLSearchParams();
+    if (cacheFilter.deckId) query.set("deckId", cacheFilter.deckId);
+    if (cacheFilter.version) query.set("version", cacheFilter.version);
+    const queryString = query.toString(),
+      filtered = !!queryString,
+      suffix = filtered ? `?${queryString}` : "",
+      result = await api(`/export-cache${suffix}`),
+      selectedDeck = result.decks.find(
+        (deck) => deck.id === cacheFilter.deckId,
+      ),
+      latestByDeck = new Map(
+        result.decks.map((deck) => [deck.id, deck.latestVersion]),
+      ),
+      deckOptions = [
+        ["", "全部演示稿"],
+        ...result.decks.map((deck) => [deck.id, `${deck.title} · ${deck.id}`]),
+      ],
+      versionOptions = selectedDeck
+        ? [
+            ["", "全部版本"],
+            ...selectedDeck.versions.map((version) => [
+              String(version),
+              `版本 ${version}`,
+              version === selectedDeck.latestVersion ? "最新" : "",
+            ]),
+          ]
+        : [["", "请先选择演示稿"]],
+      rows = result.files
+        .map((file) => {
+          const active = ["queued", "running"].includes(file.status),
+            latest = file.version === latestByDeck.get(file.deckId),
+            status = active
+              ? `<span class="cache-status active">${icon("loaderCircle", "spin")}${file.status === "queued" ? "等待生成" : "正在生成"}</span>`
+              : '<span class="cache-status ready">已缓存</span>',
+            time = active
+              ? `<span>${formatDate(file.createdAt)}</span><small>任务已进入后台队列</small>`
+              : `<span>${formatDate(file.readyAt)}</span><small>${formatDate(file.expiresAt)} 过期</small>`,
+            download = active
+              ? '<button class="icon-button cache-row-action" type="button" aria-label="文件尚未生成" title="文件尚未生成" disabled>' +
+                icon("download") +
+                "</button>"
+              : `<a class="icon-button cache-row-action" href="/api/export-cache/${encodeURIComponent(file.id)}/download" download data-download-cache aria-label="下载缓存文件" title="下载">${icon("download")}</a>`;
+          return `<tr class="${active ? "is-active" : ""}"><td><div class="cache-deck"><b>${esc(file.deckTitle)}</b><code>${esc(file.deckId)}</code></div></td><td><span class="cache-version">v${file.version}${latest ? "<em>最新</em>" : ""}</span></td><td>${esc(exportFormatNames[file.format] || file.format)}</td><td>${status}</td><td>${active ? "—" : formatSize(file.size)}</td><td><span class="cache-download-count">${icon("download")}${file.downloadCount || 0} 次</span></td><td>${time}</td><td><div class="cache-row-actions">${download}<button class="icon-button cache-row-action danger" type="button" data-delete-cache="${esc(file.id)}" data-active="${active}" aria-label="${active ? "取消生成任务" : "删除缓存文件"}" title="${active ? "取消任务" : "删除"}">${icon("trash2")}</button></div></td></tr>`;
+        })
+        .join("");
+    cachePanel.innerHTML = `<form id="exportCachePolicy" class="settings-card cache-policy-card"><div class="cache-policy-copy"><span class="cache-heading-icon">${icon("database")}</span><div><h2>导出缓存</h2><p>同一文稿版本与导出格式会直接复用已生成文件。</p></div></div><label>临时文件保留时间${selectMarkup({ id: "exportCacheMinutes", value: String(site.exportCacheMinutes || 60), options: exportCacheOptions, label: "临时文件保留时间" })}</label><button class="button primary" type="submit">保存设置</button></form><section class="settings-card cache-files-card"><div class="settings-card-heading"><span class="cache-heading-icon">${icon("fileCode2")}</span><div><h2>缓存文件与生成任务</h2><p>${result.cachedCount} 个缓存 · ${result.activeCount} 个任务生成中 · ${formatSize(result.totalSize)}</p></div><button id="clearExportCache" type="button" class="button danger" ${result.cachedCount ? "" : "disabled"}>${icon("trash2")}${filtered ? "清空筛选结果" : "清空缓存"}</button></div><div id="cacheFilter" class="cache-filter"><label>演示稿${selectMarkup({ id: "cacheDeck", value: cacheFilter.deckId, options: deckOptions, label: "选择演示稿" })}</label><label>版本${selectMarkup({ id: "cacheVersion", value: cacheFilter.version, options: versionOptions, label: "选择版本" })}</label>${filtered ? '<button id="resetCacheFilter" class="button subtle" type="button">重置筛选</button>' : ""}</div><div class="cache-table-wrap">${rows ? `<table class="cache-table"><thead><tr><th>演示稿</th><th>版本</th><th>格式</th><th>状态</th><th>大小</th><th>下载</th><th>生成与过期时间</th><th><span class="sr-only">操作</span></th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="cache-empty">${icon("database")}<b>${result.activeCount ? "正在生成导出文件" : "暂无缓存文件"}</b><span>${filtered ? "没有符合筛选条件的缓存或任务" : "导出文件后会显示在这里"}</span></div>`}</div></section>`;
+    enhanceSelects(cachePanel);
+    cachePanel.querySelector("#cacheVersionTrigger").disabled = !selectedDeck;
+    cachePanel.querySelector("#exportCachePolicy").onsubmit = async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      button.disabled = true;
+      try {
+        setSite(
+          await api("/site", {
+            method: "PATCH",
+            body: {
+              name: site.name,
+              exportCacheMinutes: Number(
+                new FormData(event.currentTarget).get("exportCacheMinutes"),
+              ),
+            },
+          }),
+        );
+        toast("缓存保留时间已更新");
+      } finally {
+        button.disabled = false;
+      }
+    };
+    cachePanel.querySelector("#cacheDeck").onchange = (event) =>
+      renderCache({ deckId: event.currentTarget.value });
+    cachePanel.querySelector("#cacheVersion").onchange = (event) =>
+      renderCache({
+        deckId: cacheFilter.deckId,
+        version: event.currentTarget.value,
+      });
+    cachePanel
+      .querySelector("#resetCacheFilter")
+      ?.addEventListener("click", () => renderCache());
+    cachePanel.querySelectorAll("[data-download-cache]").forEach((link) =>
+      link.addEventListener("click", () => {
+        setTimeout(() => void renderCache(cacheFilter), 500);
+      }),
+    );
+    cachePanel.querySelectorAll("[data-delete-cache]").forEach((button) => {
+      button.onclick = () => {
+        const active = button.dataset.active === "true";
+        showDialog(
+          active ? "取消生成任务" : "删除缓存文件",
+          `<p>${active ? "将取消这个后台导出任务。正在写入的文件会在任务退出后自动清理。" : "将删除这个临时导出文件，此操作不会影响演示稿本身。"}</p>`,
+          {
+            submit: active ? "取消任务" : "删除",
+            danger: true,
+            onSubmit: async () => {
+              await api(
+                `/export-cache/${encodeURIComponent(button.dataset.deleteCache)}`,
+                {
+                  method: "DELETE",
+                },
+              );
+              closeDialog();
+              await renderCache(cacheFilter);
+              toast(active ? "生成任务已取消" : "缓存文件已删除");
+            },
+          },
+        );
+      };
+    });
+    cachePanel.querySelector("#clearExportCache").onclick = () =>
+      showDialog(
+        filtered ? "清空筛选结果" : "清空导出缓存",
+        `<p>将删除 ${result.cachedCount} 个临时文件，释放 ${formatSize(result.totalSize)}。正在生成的任务不会中断，已经下载的文件也不会受到影响。</p>`,
+        {
+          submit: "清空",
+          danger: true,
+          onSubmit: async () => {
+            const cleared = await api(`/export-cache${suffix}`, {
+              method: "DELETE",
+            });
+            closeDialog();
+            await renderCache(filter);
+            toast(`已清理 ${cleared.removed} 个缓存文件`);
+          },
+        },
+      );
+    if (result.activeCount) {
+      const refresh = () => {
+        cacheRefreshTimer = setTimeout(() => {
+          if (!cachePanel.isConnected || cachePanel.hidden) return;
+          if (cachePanel.contains(document.activeElement)) refresh();
+          else void renderCache(cacheFilter);
+        }, 1200);
+      };
+      refresh();
+    }
+  }
+
+  main
+    .querySelector('[data-settings-tab="cache"]')
+    ?.addEventListener("click", () => renderCache(cacheFilter));
+
+  await Promise.all([
+    renderBrand(),
+    renderTeam(),
+    renderCache(),
+    renderBackups(),
+  ]);
 }

@@ -13,6 +13,8 @@ import { createRooms } from "./rooms.mjs";
 import { importPowerPoint } from "./import/powerpoint.mjs";
 import { pipeline } from "node:stream/promises";
 import { renderExport, exportTypes } from "./render-export.mjs";
+import { exportStandalone } from "./standalone-export.mjs";
+import { createExportJobs } from "./export-jobs.mjs";
 import {
   exportPackage,
   importPackageArchive,
@@ -103,6 +105,26 @@ export async function createApp({
   });
   const platform = createPlatform(store, dataDir, origin || publicURL || "");
   const rooms = createRooms(store, origin || publicURL || "");
+  const roomAdminPayload = async (room) => {
+    const state = rooms.adminState(room),
+      audience = platform.audienceState(room.interactionToken, true);
+    state.qr = await QRCode.toDataURL(state.url, {
+      width: 360,
+      margin: 1,
+      color: { dark: "#13251f", light: "#ffffff" },
+    });
+    audience.qr = await QRCode.toDataURL(audience.url, {
+      width: 320,
+      margin: 1,
+      color: { dark: "#13251f", light: "#ffffff" },
+    });
+    state.interaction = audience;
+    return state;
+  };
+  const exportJobs = createExportJobs(store, {
+    directory: path.join(dataDir, "export-cache"),
+    retention: () => settings.read().exportCacheMinutes * 60 * 1000,
+  });
   const roomCookieName = (roomToken) => `pd_room_${roomToken}`;
   const cookieValue = (req, name) => {
     const prefix = `${name}=`;
@@ -249,6 +271,15 @@ export async function createApp({
           200,
           await loginRoutes[pathname](await readJSON(req, 131072)),
         );
+      if (pathname === "/api/rooms/active" && method === "GET") {
+        const identity = auth.require(req),
+          deckId = requestURL.searchParams.get("deckId") || "";
+        store.get(deckId);
+        const room = rooms.owned(deckId, identity.user.id);
+        return json(res, 200, {
+          room: room ? await roomAdminPayload(room) : null,
+        });
+      }
       if (parts[0] === "api" && parts[1] === "rooms" && parts[2]) {
         const roomToken = parts[2];
         if (parts[3] === "join-info" && method === "GET")
@@ -275,27 +306,16 @@ export async function createApp({
         }
         if (parts[3] === "host" && method === "GET") {
           const room = rooms.requireHost(
-              roomToken,
-              String(req.headers["x-room-host"] || ""),
-            ),
-            state = rooms.adminState(room),
-            audience = platform.audienceState(room.interactionToken, true);
-          state.qr = await QRCode.toDataURL(state.url, {
-            width: 360,
-            margin: 1,
-            color: { dark: "#13251f", light: "#ffffff" },
-          });
-          audience.qr = await QRCode.toDataURL(audience.url, {
-            width: 320,
-            margin: 1,
-            color: { dark: "#13251f", light: "#ffffff" },
-          });
-          state.interaction = audience;
-          return json(res, 200, state);
+            roomToken,
+            String(req.headers["x-room-host"] || ""),
+          );
+          return json(res, 200, await roomAdminPayload(room));
         }
         const room = rooms.get(roomToken);
         if (!room) throw new HttpError(404, "房间不存在或已结束");
         if (method === "GET")
+          rooms.requireAdmission(roomToken, roomAdmission(req, roomToken));
+        if (parts[3] === "exports" && ["GET", "POST"].includes(method))
           rooms.requireAdmission(roomToken, roomAdmission(req, roomToken));
         if (parts.length === 3 && method === "GET") {
           const deck = store.get(room.deckId),
@@ -322,10 +342,60 @@ export async function createApp({
               room.permissions.interaction && room.interactionToken
                 ? `${origin || requestURL.origin}/audience/${room.interactionToken}`
                 : null,
-            downloadURL: room.permissions.downloadPdf
-              ? `/api/rooms/${room.token}/export?format=pdf`
+            exportURL: room.permissions.download
+              ? `/api/rooms/${room.token}/exports`
               : null,
           });
+        }
+        if (parts[3] === "exports") {
+          if (!room.permissions.download)
+            throw new HttpError(403, "房主未开放导出权限");
+          const scope = `room:${room.token}`,
+            downloadBase = `/api/rooms/${encodeURIComponent(room.token)}/exports`,
+            exportContext = {
+              scope,
+              downloadBase,
+              exportOptions: { allowNotes: room.permissions.notes },
+            };
+          if (parts.length === 4 && method === "GET")
+            return json(res, 200, exportJobs.list(room.deckId, exportContext));
+          if (parts.length === 4 && method === "POST")
+            return json(
+              res,
+              202,
+              exportJobs.create(
+                room.deckId,
+                (await readJSON(req, 8192)).format,
+                exportContext,
+              ),
+            );
+          if (parts[4] && parts.length === 5 && method === "GET")
+            return json(
+              res,
+              200,
+              exportJobs.get(room.deckId, parts[4], exportContext),
+            );
+          if (
+            parts[4] &&
+            parts[5] === "download" &&
+            parts.length === 6 &&
+            method === "GET"
+          ) {
+            const job = exportJobs.download(
+                room.deckId,
+                parts[4],
+                exportContext,
+              ),
+              size = fs.statSync(job.file).size;
+            res.setHeader(
+              "Content-Disposition",
+              `attachment; filename="${room.deckId}.${job.format}"; filename*=UTF-8''${encodeURIComponent(job.name).replace(/'/g, "%27")}`,
+            );
+            res.setHeader("Content-Type", job.type);
+            res.setHeader("Content-Length", size);
+            await pipeline(fs.createReadStream(job.file), res);
+            return;
+          }
         }
         if (parts[3] === "feed" && method === "GET") {
           if (!room.permissions.interaction)
@@ -345,8 +415,8 @@ export async function createApp({
           );
         }
         if (parts[3] === "export" && method === "GET") {
-          if (!room.permissions.downloadPdf)
-            throw new HttpError(403, "房主未开放 PDF 下载权限");
+          if (!room.permissions.download)
+            throw new HttpError(403, "房主未开放导出权限");
           const deck = store.get(room.deckId),
             file = await renderExport(store, room.deckId, "pdf"),
             name =
@@ -426,7 +496,13 @@ export async function createApp({
       }
       if (pathname.startsWith("/api/")) {
         if (parts[1] === "public") {
-          requireValue(method === "GET", "分享链接仅允许查看");
+          requireValue(
+            method === "GET" ||
+              (method === "POST" &&
+                parts[3] === "exports" &&
+                parts.length === 4),
+            "分享链接仅允许查看或导出",
+          );
           const { deck, share } = store.publicAccess(parts[2]);
           if (parts.length === 3)
             if (requestURL.searchParams.get("view") === "1")
@@ -462,12 +538,57 @@ export async function createApp({
               assetTypes[path.extname(file).toLowerCase()],
             );
           }
+          if (parts[3] === "exports") {
+            if (!share.allow_download)
+              throw new HttpError(403, "此分享链接未开放导出权限");
+            const scope = `share:${share.id}`,
+              downloadBase = `/api/public/${encodeURIComponent(parts[2])}/exports`,
+              exportContext = {
+                scope,
+                downloadBase,
+                exportOptions: { allowNotes: !!share.allow_notes },
+              };
+            if (parts.length === 4 && method === "GET")
+              return json(res, 200, exportJobs.list(deck.id, exportContext));
+            if (parts.length === 4 && method === "POST") {
+              const job = exportJobs.create(
+                deck.id,
+                (await readJSON(req, 8192)).format,
+                exportContext,
+              );
+              store.recordShareDownload(share.id);
+              return json(res, 202, job);
+            }
+            if (parts[4] && parts.length === 5 && method === "GET")
+              return json(
+                res,
+                200,
+                exportJobs.get(deck.id, parts[4], exportContext),
+              );
+            if (
+              parts[4] &&
+              parts[5] === "download" &&
+              parts.length === 6 &&
+              method === "GET"
+            ) {
+              const job = exportJobs.download(deck.id, parts[4], exportContext),
+                size = fs.statSync(job.file).size;
+              res.setHeader(
+                "Content-Disposition",
+                `attachment; filename="${deck.id}.${job.format}"; filename*=UTF-8''${encodeURIComponent(job.name).replace(/'/g, "%27")}`,
+              );
+              res.setHeader("Content-Type", job.type);
+              res.setHeader("Content-Length", size);
+              await pipeline(fs.createReadStream(job.file), res);
+              return;
+            }
+          }
           if (parts[3] === "export") {
             if (!share.allow_download)
-              throw new HttpError(403, "此分享链接未开放下载权限");
+              throw new HttpError(403, "此分享链接未开放导出权限");
             const format = requestURL.searchParams.get("format") || "pdf";
             requireValue(
-              ["zip", "pdf", "pptx"].includes(format),
+              ["zip", "html", "pdf", "pptx"].includes(format),
               "导出格式不正确",
             );
             const name =
@@ -476,8 +597,16 @@ export async function createApp({
               format;
             const file =
               format === "zip"
-                ? exportPackage(store, deck.id)
-                : await renderExport(store, deck.id, format);
+                ? exportPackage(store, deck.id, {
+                    allowNotes: !!share.allow_notes,
+                  })
+                : format === "html"
+                  ? exportStandalone(store, deck.id, {
+                      allowNotes: share.allow_notes,
+                    })
+                  : await renderExport(store, deck.id, format, {
+                      allowNotes: !!share.allow_notes,
+                    });
             store.recordShareDownload(share.id);
             res.setHeader(
               "Content-Disposition",
@@ -485,7 +614,11 @@ export async function createApp({
             );
             res.setHeader(
               "Content-Type",
-              format === "zip" ? "application/zip" : exportTypes[format],
+              format === "zip"
+                ? "application/zip"
+                : format === "html"
+                  ? "text/html; charset=utf-8"
+                  : exportTypes[format],
             );
             if (format === "zip") await pipeline(file, res);
             else res.end(file);
@@ -498,6 +631,7 @@ export async function createApp({
           ownerOnly =
             pathname.startsWith("/api/workspace-users") ||
             pathname.startsWith("/api/backups") ||
+            pathname.startsWith("/api/export-cache") ||
             pathname.startsWith("/api/security") ||
             (pathname === "/api/site" && method !== "GET");
         if (ownerOnly && role !== "owner")
@@ -576,6 +710,40 @@ export async function createApp({
           if (method === "POST")
             return json(res, 201, await platform.createBackup());
         }
+        if (pathname === "/api/export-cache") {
+          const filter = {
+            deckId: requestURL.searchParams.get("deckId") || "",
+            version: requestURL.searchParams.get("version") || "",
+          };
+          if (method === "GET") return json(res, 200, exportJobs.cache(filter));
+          if (method === "DELETE")
+            return json(res, 200, exportJobs.clearCache(filter));
+        }
+        if (
+          parts[1] === "export-cache" &&
+          parts[2] &&
+          parts.length === 3 &&
+          method === "DELETE"
+        )
+          return json(res, 200, exportJobs.deleteCache(parts[2]));
+        if (
+          parts[1] === "export-cache" &&
+          parts[2] &&
+          parts[3] === "download" &&
+          parts.length === 4 &&
+          method === "GET"
+        ) {
+          const job = exportJobs.downloadCache(parts[2]),
+            size = fs.statSync(job.file).size;
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename*=UTF-8''${encodeURIComponent(job.name).replace(/'/g, "%27")}`,
+          );
+          res.setHeader("Content-Type", job.type);
+          res.setHeader("Content-Length", size);
+          await pipeline(fs.createReadStream(job.file), res);
+          return;
+        }
         if (parts[1] === "backups" && parts[2]) {
           if (parts[2] === "restore" && method === "POST") {
             const result = await platform.restoreBackup(
@@ -613,9 +781,12 @@ export async function createApp({
         }
         if (pathname === "/api/rooms" && method === "POST") {
           const input = await readJSON(req, 8192),
-            audience = platform.createAudience(input.deckId),
+            existing = rooms.owned(input.deckId, identity.user.id);
+          if (existing) return json(res, 200, await roomAdminPayload(existing));
+          const audience = platform.createAudience(input.deckId),
             room = rooms.create({
               deckId: input.deckId,
+              ownerId: identity.user.id,
               page: input.page,
               permissions: input.permissions,
               interactionToken: audience.token,
@@ -626,19 +797,7 @@ export async function createApp({
             { body: `欢迎来到 ${audience.title}` },
             "system",
           );
-          room.qr = await QRCode.toDataURL(room.url, {
-            width: 360,
-            margin: 1,
-            color: { dark: "#13251f", light: "#ffffff" },
-          });
-          audience.qr = await QRCode.toDataURL(audience.url, {
-            width: 320,
-            margin: 1,
-            color: { dark: "#13251f", light: "#ffffff" },
-          });
-          room.interaction = platform.audienceState(audience.token, true);
-          room.interaction.qr = audience.qr;
-          return json(res, 201, room);
+          return json(res, 201, await roomAdminPayload(room));
         }
         if (parts[1] === "rooms" && parts[2]) {
           const hostToken = String(req.headers["x-room-host"] || "");
@@ -948,10 +1107,39 @@ export async function createApp({
             return json(res, 200, { ok: true });
           }
         }
+        if (parts[3] === "exports") {
+          if (parts.length === 4 && method === "GET")
+            return json(res, 200, exportJobs.list(id));
+          if (parts.length === 4 && method === "POST")
+            return json(
+              res,
+              202,
+              exportJobs.create(id, (await readJSON(req, 8192)).format),
+            );
+          if (parts[4] && parts.length === 5 && method === "GET")
+            return json(res, 200, exportJobs.get(id, parts[4]));
+          if (
+            parts[4] &&
+            parts[5] === "download" &&
+            parts.length === 6 &&
+            method === "GET"
+          ) {
+            const job = exportJobs.download(id, parts[4]),
+              size = fs.statSync(job.file).size;
+            res.setHeader(
+              "Content-Disposition",
+              `attachment; filename="${id}.${job.format}"; filename*=UTF-8''${encodeURIComponent(job.name).replace(/'/g, "%27")}`,
+            );
+            res.setHeader("Content-Type", job.type);
+            res.setHeader("Content-Length", size);
+            await pipeline(fs.createReadStream(job.file), res);
+            return;
+          }
+        }
         if (parts[3] === "export" && method === "GET") {
           const format = requestURL.searchParams.get("format") || "zip";
           requireValue(
-            ["zip", "pdf", "pptx"].includes(format),
+            ["zip", "html", "pdf", "pptx"].includes(format),
             "导出格式不正确",
           );
           const name =
@@ -965,16 +1153,22 @@ export async function createApp({
             const file =
               format === "zip"
                 ? exportPackage(store, id)
-                : await renderExport(store, id, format, {
-                    signal: cancel.signal,
-                  });
+                : format === "html"
+                  ? exportStandalone(store, id)
+                  : await renderExport(store, id, format, {
+                      signal: cancel.signal,
+                    });
             res.setHeader(
               "Content-Disposition",
               `attachment; filename="${id}.${format}"; filename*=UTF-8''${encodeURIComponent(name).replace(/'/g, "%27")}`,
             );
             res.setHeader(
               "Content-Type",
-              format === "zip" ? "application/zip" : exportTypes[format],
+              format === "zip"
+                ? "application/zip"
+                : format === "html"
+                  ? "text/html; charset=utf-8"
+                  : exportTypes[format],
             );
             if (format === "zip") await pipeline(file, res);
             else {
@@ -1012,6 +1206,8 @@ export async function createApp({
             "Content-Security-Policy",
             "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline' 'self'; font-src 'self' data:; script-src 'none'; frame-ancestors 'self'; sandbox allow-same-origin",
           );
+          if (requestURL.searchParams.has("v"))
+            res.setHeader("Cache-Control", "private, max-age=3600, immutable");
           res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
           res.end(
             `<!doctype html><html><head><meta charset="utf-8"><base href="/api/decks/${id}/files/"><style>${c.css}</style><style>body{margin:0;overflow:hidden}#deck{position:absolute;inset:0;transform-origin:0 0;transform:scale(calc(100vw / ${d.width}px));width:${d.width}px;height:${d.height}px}.slide{display:${allPages ? "none" : "block"}!important;position:absolute;width:${d.width}px;height:${d.height}px}#deck>.slide[data-page="${requestedPage}"]{display:block!important}*{animation:none!important;transition:none!important}</style></head><body><div id="deck">${preview}</div></body></html>`,
@@ -1168,6 +1364,7 @@ export async function createApp({
       rooms.close();
       roomSockets.close();
       await new Promise((resolve) => server.close(resolve));
+      await exportJobs.close();
       store.close();
     },
   };

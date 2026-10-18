@@ -6,7 +6,7 @@ const MB = 1024 * 1024;
 export const PACKAGE_LIMIT = 200 * MB;
 const FORMAT = "deck-library/zip-v1";
 const jsonBytes = (value) => Buffer.from(JSON.stringify(value, null, 2) + "\n");
-export function exportPackage(store, id) {
+export function exportPackage(store, id, { allowNotes = true } = {}) {
   const d = store.get(id),
     content = store.content(id),
     zip = new yazl.ZipFile();
@@ -26,7 +26,15 @@ export function exportPackage(store, id) {
   zip.addBuffer(jsonBytes(metadata), "metadata.json");
   zip.addBuffer(Buffer.from(content.html), "content.html");
   zip.addBuffer(Buffer.from(content.css), "styles.css");
-  zip.addBuffer(jsonBytes(content.notes), "notes.json");
+  const notes = allowNotes
+    ? content.notes
+    : Object.fromEntries(
+        Object.entries(content.notes).map(([page, value]) => [
+          page,
+          { title: value.title, notes: "", refs: [], figures: [] },
+        ]),
+      );
+  zip.addBuffer(jsonBytes(notes), "notes.json");
   if (d.favicon)
     zip.addBuffer(
       Buffer.from(d.favicon.split(",")[1], "base64"),

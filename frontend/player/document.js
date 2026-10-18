@@ -1,3 +1,5 @@
+import { deferSlideImages } from "./media.js";
+
 const escape = (s) =>
   String(s)
     .replaceAll("&", "&amp;")
@@ -13,6 +15,7 @@ export function playerDocument({
   baseCSS,
   playerCSS,
 }) {
+  html = deferSlideImages(html);
   const text = Object.entries(notes)
     .map(
       ([n, s]) =>

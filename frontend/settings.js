@@ -76,7 +76,7 @@ export async function openSettings() {
   sessionStorage.setItem("libraryView", "settings");
   if (
     session.role !== "owner" &&
-    ["brand", "team", "backup"].includes(activeTab)
+    ["brand", "team", "cache", "backup"].includes(activeTab)
   )
     activeTab = "general";
   let [security, sessionResult] = await Promise.all([

@@ -115,6 +115,24 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.select-trigger > span:has(.select-option-tag),
+.select-menu [role="option"] > span:has(.select-option-tag) {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.select-option-tag {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--accent-ink);
+  background: var(--light);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 550;
+  line-height: 1.4;
+}
 label > .custom-select {
   margin-top: 8px;
 }

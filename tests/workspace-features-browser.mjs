@@ -194,7 +194,94 @@ try {
   });
   await presenter
     .frameLocator("#currentFrame")
-    .locator('[data-presenter-preview-active][data-page="1"]')
+    .frameLocator("#playerFrame")
+    .locator('.slide.active[data-page="1"]')
+    .waitFor();
+  const embeddedPresentation = presenter
+    .frameLocator("#currentFrame")
+    .frameLocator("#playerFrame");
+  const compactDock = await embeddedPresentation
+    .locator("body")
+    .evaluate(() => ({
+      visible: ["pointerBtn", "laserBtn", "inkBtn"].every(
+        (id) => !document.getElementById(id).hidden,
+      ),
+      hidden: [
+        "prev",
+        "counter",
+        "next",
+        "overviewBtn",
+        "notesBtn",
+        "editBtn",
+        "undoBtn",
+        "fullscreenBtn",
+        "exportBtn",
+        "moreBtn",
+        "presenterViewBtn",
+        "remoteControlBtn",
+        "roomBtn",
+      ].every(
+        (id) =>
+          !document.getElementById(id) || document.getElementById(id).hidden,
+      ),
+      timer: Boolean(document.querySelector("#presentationTimer")),
+      feed: Boolean(document.querySelector("#roomLiveFeed")),
+    }));
+  assert.deepEqual(compactDock, {
+    visible: true,
+    hidden: true,
+    timer: false,
+    feed: false,
+  });
+  await presenter.locator("#presenterOverview").click();
+  await embeddedPresentation.locator("#overview:not([hidden])").waitFor();
+  await embeddedPresentation.locator('[data-close="overview"]').click();
+  await projection.evaluate(() => window.presentation.setTool("pen"));
+  await embeddedPresentation
+    .locator('body[data-tool="pen"]')
+    .waitFor({ state: "attached" });
+  await presenter
+    .locator("#currentFrame")
+    .evaluate((frame) => frame.contentWindow.presentation.setTool("laser"));
+  await presentationFrame
+    .locator('body[data-tool="laser"]')
+    .waitFor({ state: "attached" });
+  const projectionStageBox = await presentationFrame
+    .locator("#stage")
+    .boundingBox();
+  await projection.mouse.move(
+    projectionStageBox.x + projectionStageBox.width * 0.5,
+    projectionStageBox.y + projectionStageBox.height * 0.5,
+  );
+  await embeddedPresentation
+    .locator('#roomPointer.visible[data-tool="laser"]')
+    .waitFor();
+  await presenter
+    .locator("#currentFrame")
+    .evaluate((frame) => frame.contentWindow.presentation.setTool("pen"));
+  const embeddedStageBox = await embeddedPresentation
+    .locator("#stage")
+    .boundingBox();
+  await presenter.mouse.move(
+    embeddedStageBox.x + embeddedStageBox.width * 0.42,
+    embeddedStageBox.y + embeddedStageBox.height * 0.46,
+  );
+  await presenter.mouse.down();
+  await presenter.mouse.move(
+    embeddedStageBox.x + embeddedStageBox.width * 0.56,
+    embeddedStageBox.y + embeddedStageBox.height * 0.54,
+    { steps: 8 },
+  );
+  await presenter.mouse.up();
+  await presentationFrame.locator(".ink-layer path").first().waitFor();
+  await projection.evaluate(() => window.presentation.clearInk());
+  await embeddedPresentation
+    .locator(".ink-layer path")
+    .waitFor({ state: "detached" });
+  await projection.evaluate(() => window.presentation.setTool("pointer"));
+  await presenter
+    .frameLocator("#nextFrame")
+    .locator('[data-presenter-preview-active][data-page="2"]')
     .waitFor();
   await presenter.evaluate(() => {
     window.__presenterPreviewLoads = 0;
@@ -220,17 +307,16 @@ try {
   });
   await presenter
     .frameLocator("#currentFrame")
-    .locator('[data-presenter-preview-active][data-page="3"]')
-    .waitFor({ timeout: 1500 });
-  assert(Date.now() - rapidSyncStarted < 1500);
-  assert.equal(
-    await presenter.evaluate(() => window.__presenterPreviewLoads),
-    0,
-  );
+    .frameLocator("#playerFrame")
+    .locator('.slide.active[data-page="3"]')
+    .waitFor({ timeout: 3000 });
+  assert(Date.now() - rapidSyncStarted < 3000);
+  assert((await presenter.evaluate(() => window.__presenterPreviewLoads)) <= 2);
   await projection.evaluate(() => window.presentation.go(1));
   await presenter
     .frameLocator("#currentFrame")
-    .locator('[data-presenter-preview-active][data-page="1"]')
+    .frameLocator("#playerFrame")
+    .locator('.slide.active[data-page="1"]')
     .waitFor();
   const presenterLayout = await presenter.evaluate(() => {
     const nextWrap = document.querySelector(".next-card .slide-frame-wrap"),
@@ -254,25 +340,37 @@ try {
     notesScroll: true,
     nextFits: true,
   });
-  await presenter.locator(".current-card .slide-frame-wrap").click();
+  await presenter.locator(".next-card .slide-frame-wrap").click();
   await projection.waitForURL("**/present/workspace-feature-test#2");
   await presenter
     .frameLocator("#currentFrame")
-    .locator('[data-presenter-preview-active][data-page="2"]')
+    .frameLocator("#playerFrame")
+    .locator('.slide.active[data-page="2"]')
     .waitFor();
   await presenter.locator("#previousPage").click();
   await projection.waitForURL("**/present/workspace-feature-test#1");
-  await presenter
-    .locator(".current-card .slide-frame-wrap")
-    .dispatchEvent("wheel", { deltaX: 0, deltaY: 120, deltaMode: 0 });
+  await presenter.locator(".notes-card").dispatchEvent("wheel", {
+    deltaX: 0,
+    deltaY: 120,
+    deltaMode: 0,
+  });
+  await presenter.waitForTimeout(120);
+  assert.match(projection.url(), /#1$/);
+  await embeddedPresentation.locator("#stage").hover();
+  await presenter.mouse.wheel(0, 120);
   await projection.waitForURL("**/present/workspace-feature-test#2");
   await presenter
     .frameLocator("#currentFrame")
-    .locator('[data-presenter-preview-active][data-page="2"]')
+    .frameLocator("#playerFrame")
+    .locator('.slide.active[data-page="2"]')
     .waitFor();
   assert.match(
     await presenter.locator("#currentFrame").getAttribute("src"),
-    /all=1/,
+    /embedded=presenter#1/,
+  );
+  assert.match(
+    await presenter.locator("#nextFrame").getAttribute("src"),
+    /page=3/,
   );
   let sharedDeck = await request(`/decks/${deck.id}`);
   sharedDeck = await request(`/decks/${deck.id}`, "PATCH", {

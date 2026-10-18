@@ -20,6 +20,8 @@ const names = {
   full: "Maximize",
   exitFull: "Minimize",
   more: "Ellipsis",
+  export: "Download",
+  loading: "LoaderCircle",
   print: "Printer",
   check: "Check",
   close: "X",

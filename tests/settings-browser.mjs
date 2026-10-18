@@ -184,7 +184,7 @@ try {
       assert(
         !(await page.locator("#dialog").textContent()).includes("私有模式下"),
       );
-      await page.getByRole("combobox", { name: "访问权限" }).click();
+      await page.getByRole("combobox", { name: "访问权限", exact: true }).click();
       await page.keyboard.press("Escape");
       assert(await page.locator("#dialog").isVisible());
       await choose("访问权限", "链接分享 · 持有有效链接者可见");

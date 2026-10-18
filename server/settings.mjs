@@ -41,6 +41,7 @@ export function createSettings(db) {
     return {
       theme: "system",
       toastPosition: "bottom-center",
+      exportCacheMinutes: 60,
       ...(row ? JSON.parse(row.value) : { name: "演示库", favicon: null }),
     };
   };
@@ -71,9 +72,17 @@ export function createSettings(db) {
         ].includes(toastPosition),
         "提示位置不正确",
       );
+      const exportCacheMinutes = Number(
+        input.exportCacheMinutes ?? current.exportCacheMinutes,
+      );
+      requireValue(
+        [5, 30, 60, 360, 720, 1440, 10080].includes(exportCacheMinutes),
+        "导出文件保留时间不正确",
+      );
       const value = {
         theme,
         toastPosition,
+        exportCacheMinutes,
         name: input.name.trim(),
         favicon:
           input.favicon === undefined

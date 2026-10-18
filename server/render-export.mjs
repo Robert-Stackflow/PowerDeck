@@ -26,7 +26,12 @@ export function exportDocument(meta, content) {
   @page{size:${meta.width}px ${meta.height}px;margin:0}
   </style></head><body><div id="deck">${content.html}</div></body></html>`;
 }
-export async function renderExport(store, id, format, { signal } = {}) {
+export async function renderExport(
+  store,
+  id,
+  format,
+  { signal, allowNotes = true } = {},
+) {
   if (!exportTypes[format]) throw new HttpError(400, "导出格式不正确");
   if (active) throw new HttpError(429, "正在生成另一份文件，请稍后再试");
   active = true;
@@ -41,6 +46,13 @@ export async function renderExport(store, id, format, { signal } = {}) {
   try {
     const meta = store.get(id),
       content = store.content(id);
+    if (!allowNotes)
+      content.notes = Object.fromEntries(
+        Object.entries(content.notes).map(([page, value]) => [
+          page,
+          { title: value.title, notes: "", refs: [], figures: [] },
+        ]),
+      );
     if (signal?.aborted) throw new HttpError(499, "导出已取消");
     try {
       browser = await chromium.launch({

@@ -40,6 +40,21 @@ export async function mountVisualEditor({
 }) {
   const loadingOverlay = root.querySelector(".editor-loading-overlay");
   root.innerHTML = `<div class="visual-toolbar"><div class="visual-tool-group">${tool("visualUndo", "undo", "撤销")}${tool("visualRedo", "redo", "重做")}</div><div class="visual-tool-group"><button class="button subtle" id="insertPage" aria-haspopup="menu" aria-expanded="false">${icon("plus")}新增页面${icon("down")}</button></div><div class="visual-tool-group"><button class="button subtle" id="insertText">${icon("type")}文字</button><button class="button subtle" id="insertImage">${icon("image")}图片</button><button class="button subtle" id="openBrandAssets" aria-haspopup="dialog" aria-expanded="false">${icon("library")}素材库</button><button class="button subtle" id="insertShape" aria-haspopup="dialog" aria-expanded="false">${icon("square")}形状${icon("down")}</button><button class="button subtle" id="insertTable">${icon("table2")}表格</button><button class="button subtle" id="insertChart">${icon("chartNoAxesColumn")}图表</button><button class="button subtle" id="insertMedia">${icon("clapperboard")}音视频</button><button class="button subtle" id="insertFormula">${icon("sigma")}公式</button><button class="button subtle" id="insertLink" disabled>${icon("link")}链接</button></div><div class="visual-toolbar-end">${tool("snapToggle", "magnet", "对齐辅助线（按住 Alt 暂停吸附）")}</div></div><div class="visual-layout"><aside class="slide-rail"><div id="slideList" class="slide-list" aria-label="幻灯片页面"></div></aside><div class="visual-center"><div class="visual-stage"><iframe id="visualCanvas" title="可视化编辑画布" sandbox="allow-same-origin"></iframe></div></div><aside class="visual-inspector"><div class="inspector-tabs" role="tablist" aria-label="页面侧边栏"><button type="button" id="inspectorPageTab" role="tab" data-inspector-tab="page" aria-selected="true" aria-controls="inspectorPagePanel">页面</button><button type="button" id="inspectorNotesTab" role="tab" data-inspector-tab="notes" aria-selected="false" aria-controls="inspectorNotesPanel">标题与备注</button><button type="button" id="inspectorReferencesTab" role="tab" data-inspector-tab="references" aria-selected="false" aria-controls="inspectorReferencesPanel">引用</button></div><section id="inspectorPagePanel" class="inspector-tab-panel inspector-page-panel" data-inspector-panel="page" role="tabpanel" aria-labelledby="inspectorPageTab"><div id="elementInspector"></div></section><section id="inspectorNotesPanel" class="inspector-tab-panel inspector-notes-panel" data-inspector-panel="notes" role="tabpanel" aria-labelledby="inspectorNotesTab" hidden><div class="visual-notes-field"><div class="inspector-field-heading"><label for="visualPageTitle">页面标题</label><button type="button" id="visualPageCount" aria-label="当前页面"></button></div><input id="visualPageTitle" aria-label="页面标题" maxlength="200" placeholder="输入页面标题" spellcheck="false"><label for="visualPageNotes">页面备注</label><textarea id="visualPageNotes" aria-label="页面备注" placeholder="添加当前页的演讲备注…"></textarea></div></section><section id="inspectorReferencesPanel" class="inspector-tab-panel inspector-references-panel" data-inspector-panel="references" role="tabpanel" aria-labelledby="inspectorReferencesTab" hidden><section class="visual-page-refs" id="visualPageRefs" aria-label="当前页引用"><header><h2>当前页引用</h2><div><button type="button" class="button subtle reference-library-button" id="openReferenceLibrary">资料库</button><button type="button" class="icon-button" id="addReference" aria-label="添加引用" title="添加引用">${icon("plus")}</button></div></header><div id="referenceList"></div></section></section></aside></div><input id="visualImageFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml" hidden><input id="visualMediaFile" type="file" accept="video/mp4,video/webm,audio/mpeg,audio/wav,audio/ogg" hidden><div id="pageInsertPopover" class="editor-popover page-insert-popover" popover="auto" role="menu" aria-label="新增页面"></div><div id="referenceLibraryPopover" class="editor-popover reference-library-popover" popover="auto" role="dialog" aria-label="引用资料库"></div><div id="brandAssetsPopover" class="editor-popover brand-assets-popover" popover="auto" role="dialog" aria-label="品牌素材库"></div><div id="shapePopover" class="editor-popover shape-popover" popover="auto" role="dialog" aria-label="插入形状"><div class="shape-grid">${shapes.map((shape) => `<button type="button" data-shape="${shape.id}" aria-label="${shape.label}" title="${shape.label}">${icon(shape.icon)}<span>${shape.label}</span></button>`).join("")}</div></div><div id="linkPopover" class="editor-popover link-popover" popover="auto" role="dialog" aria-label="超链接"><form id="editorLinkForm"><div class="link-popover-heading"><h2>超链接</h2>${tool("closeLink", "x", "关闭链接设置")}</div><label>链接地址<input id="editorLinkURL" placeholder="https://" autocomplete="off" spellcheck="false" aria-label="链接地址"></label><p id="editorLinkError" class="form-error" role="alert"></p><div class="link-popover-actions"><button type="button" class="button subtle" id="removeEditorLink">移除链接</button><button type="submit" class="button primary">应用</button></div></form></div>`;
+  const snapControl = root.querySelector("#snapToggle"),
+    guideSplit = document.createElement("div");
+  guideSplit.className = "guide-split";
+  snapControl.before(guideSplit);
+  snapControl.className = "button subtle guide-main";
+  snapControl.innerHTML = `${icon("magnet")}<span>辅助线</span>`;
+  guideSplit.append(snapControl);
+  guideSplit.insertAdjacentHTML(
+    "beforeend",
+    `<button type="button" class="button subtle guide-settings-button" id="openGuideSettings" aria-label="编辑辅助设置" title="编辑辅助设置" aria-haspopup="dialog" aria-expanded="false">${icon("down")}</button>`,
+  );
+  root.insertAdjacentHTML(
+    "beforeend",
+    `<div id="guideSettingsPopover" class="editor-popover guide-settings-popover" popover="auto" role="dialog" aria-label="编辑辅助设置"><header><strong>编辑辅助</strong></header><div class="guide-toggle-list"><button type="button" class="guide-toggle" id="containMarqueeSelection" role="switch" aria-checked="true"><span>完整框选<small>仅选择完全位于选框内的组件</small></span><i aria-hidden="true"></i></button><button type="button" class="guide-toggle" id="showDrawingGuides" role="switch" aria-checked="false"><span>中心参考线<small>显示页面水平与垂直中心</small></span><i aria-hidden="true"></i></button><button type="button" class="guide-toggle" id="showEditorGrid" role="switch" aria-checked="false"><span>网格与吸附<small>显示网格并吸附到交点</small></span><i aria-hidden="true"></i></button></div><label class="grid-size-field"><span>网格间距</span><input id="editorGridSize" type="number" min="5" max="200" step="5" value="20"></label><div class="guide-settings-divider"></div><section class="custom-guide-section"><strong>自定义参考线</strong><span class="custom-guide-subtitle">拖动蓝色参考线调整位置，双击即可删除</span><div class="guide-settings-actions"><button type="button" class="button" id="addVerticalGuide">垂直</button><button type="button" class="button" id="addHorizontalGuide">水平</button></div><button type="button" class="guide-clear-button" id="clearCustomGuides">清除自定义参考线</button></section></div>`,
+  );
   if (loadingOverlay) root.append(loadingOverlay);
   const $ = (selector) => root.querySelector(selector);
   $("#inspectorPageTab").insertAdjacentHTML(
@@ -239,7 +254,7 @@ export async function mountVisualEditor({
       const { assets } = await api("/brand-assets");
       panel.querySelector(".brand-assets-loading").outerHTML = assets.length
         ? `<div class="brand-assets-grid">${assets.map((asset) => `<button type="button" data-brand-asset="${asset.id}" title="插入 ${esc(asset.name)}"><img src="/api/brand-assets/${asset.id}/file" alt=""><span>${esc(asset.name)}</span></button>`).join("")}</div>`
-        : '<p class="reference-empty">素材库为空，可在设置中上传品牌素材</p>';
+        : '<p class="brand-assets-empty">素材库为空，可在设置中上传品牌素材</p>';
     } catch (error) {
       panel.querySelector(".brand-assets-loading").textContent = error.message;
     }
@@ -574,6 +589,12 @@ export async function mountVisualEditor({
     if (info.multi) {
       colors.close();
       container.innerHTML = `<div class="visual-panel-head"><h2>${esc(info.type)}</h2></div><div class="multi-selection-panel"><p>按住 Shift 可继续选择或取消选择图层。</p><section class="property-section"><h3>对齐所选图层</h3><div class="alignment-actions">${tool("alignSelectionLeft", "alignLeft", "左对齐")}${tool("alignSelectionCenter", "alignCenter", "水平居中")}${tool("alignSelectionRight", "alignRight", "右对齐")}${tool("alignSelectionTop", "arrowUp", "顶部对齐")}${tool("alignSelectionMiddle", "minus", "垂直居中")}${tool("alignSelectionBottom", "arrowDown", "底部对齐")}</div></section><div class="element-actions stacked"><button type="button" class="button" id="groupElements">${icon("group")}组合</button><button type="button" class="button" id="lockElement">${icon(info.locked ? "unlock" : "lockKeyhole")}${info.locked ? "解锁" : "锁定"}</button><button type="button" class="button" id="duplicateElement">${icon("copy")}复制所选</button><button type="button" class="icon-button danger" id="deleteElement" aria-label="删除所选">${icon("trash2")}</button></div></div>`;
+      container
+        .querySelector(".property-section")
+        .insertAdjacentHTML(
+          "beforeend",
+          `<div class="distribution-actions"><button type="button" class="button" id="distributeHorizontal" ${info.count < 3 ? "disabled" : ""}>水平等距</button><button type="button" class="button" id="distributeVertical" ${info.count < 3 ? "disabled" : ""}>垂直等距</button></div>`,
+        );
       for (const [id, alignment] of [
         ["alignSelectionLeft", "left"],
         ["alignSelectionCenter", "center"],
@@ -583,6 +604,10 @@ export async function mountVisualEditor({
         ["alignSelectionBottom", "bottom"],
       ])
         $("#" + id).onclick = () => canvas.alignSelection(alignment);
+      $("#distributeHorizontal").onclick = () =>
+        canvas.distributeSelection("horizontal");
+      $("#distributeVertical").onclick = () =>
+        canvas.distributeSelection("vertical");
       $("#duplicateElement").onclick = () => canvas.duplicateSelection();
       $("#deleteElement").onclick = () => canvas.deleteSelection();
       $("#groupElements").onclick = () => canvas.groupSelection();
@@ -735,6 +760,33 @@ export async function mountVisualEditor({
     baseCSS,
     baseURL,
     onDirty,
+    initialPage,
+    onError,
+    onPasteImages: async (files) => {
+      if (files.length > 20) throw new Error("一次最多粘贴 20 张图片");
+      const paths = [];
+      for (const file of files) {
+        const extensions = {
+          "image/png": "png",
+          "image/jpeg": "jpg",
+          "image/gif": "gif",
+          "image/webp": "webp",
+          "image/avif": "avif",
+          "image/svg+xml": "svg",
+        };
+        const extension = extensions[file.type];
+        if (!extension) throw new Error("不支持的剪贴板图片格式");
+        const name = `paste-${crypto.randomUUID().slice(0, 12)}.${extension}`;
+        const { assets } = await api(`/decks/${id}/assets`, {
+          method: "POST",
+          body: { files: [{ ...(await fileBase64(file)), name }] },
+        });
+        const asset = assets.find((entry) => entry.name === name);
+        if (!asset) throw new Error("粘贴图片上传失败");
+        paths.push(asset.path);
+      }
+      return paths;
+    },
     onChange: (content) => {
       content.notes = notesWithReferenceLibrary(content.notes);
       onChange(content);
@@ -759,7 +811,8 @@ export async function mountVisualEditor({
     onLinkRequest: openLink,
     onFormulaRequest: (info) => formula.open(info.tex),
   });
-  canvas.go(Math.max(0, Math.trunc(initialPage) - 1));
+  $("#visualCanvas").title =
+    "可视化编辑画布：空白处拖动框选，Shift 追加选择，Ctrl/Cmd+C/V 复制粘贴";
   updateNotes();
   const themePresets = {
     classic: {
@@ -859,11 +912,66 @@ export async function mountVisualEditor({
   };
   let snapping = true;
   $("#snapToggle").setAttribute("aria-pressed", "true");
+  $("#snapToggle").setAttribute("title", "智能辅助线（按住 Alt 暂停吸附）");
   $("#snapToggle").onclick = () => {
     snapping = !snapping;
     canvas.setSnapping(snapping);
     $("#snapToggle").setAttribute("aria-pressed", String(snapping));
   };
+  const guideOptions = { guides: false, grid: false, gridSize: 20 },
+    marqueePreferenceKey = "powerdeck.editor.marquee-containment";
+  bindPopoverToggle($("#openGuideSettings"), $("#guideSettingsPopover"));
+  const toggleValue = (node) => node.getAttribute("aria-checked") === "true";
+  const setToggle = (node, value) =>
+    node.setAttribute("aria-checked", String(!!value));
+  try {
+    setToggle(
+      $("#containMarqueeSelection"),
+      localStorage.getItem(marqueePreferenceKey) !== "false",
+    );
+  } catch {}
+  const updateGuideOptions = () => {
+    guideOptions.guides = toggleValue($("#showDrawingGuides"));
+    guideOptions.grid = toggleValue($("#showEditorGrid"));
+    guideOptions.gridSize = Math.max(
+      5,
+      Math.min(200, Number($("#editorGridSize").value) || 20),
+    );
+    $("#editorGridSize").value = guideOptions.gridSize;
+    $("#editorGridSize").disabled = !guideOptions.grid;
+    const containSelection = toggleValue($("#containMarqueeSelection"));
+    canvas.setMarqueeContainment(containSelection);
+    try {
+      localStorage.setItem(marqueePreferenceKey, String(containSelection));
+    } catch {}
+    canvas.setGuideOptions(guideOptions);
+    $("#openGuideSettings").classList.toggle(
+      "active",
+      guideOptions.guides || guideOptions.grid,
+    );
+  };
+  for (const toggle of [
+    $("#containMarqueeSelection"),
+    $("#showDrawingGuides"),
+    $("#showEditorGrid"),
+  ])
+    toggle.onclick = () => {
+      setToggle(toggle, !toggleValue(toggle));
+      updateGuideOptions();
+    };
+  $("#editorGridSize").onchange = updateGuideOptions;
+  $("#addVerticalGuide").onclick = () => {
+    setToggle($("#showDrawingGuides"), true);
+    updateGuideOptions();
+    canvas.addGuide("x");
+  };
+  $("#addHorizontalGuide").onclick = () => {
+    setToggle($("#showDrawingGuides"), true);
+    updateGuideOptions();
+    canvas.addGuide("y");
+  };
+  $("#clearCustomGuides").onclick = () => canvas.clearGuides();
+  updateGuideOptions();
   $("#insertFormula").onclick = () => {
     canvas.finishEdit();
     formula.open("", true);
@@ -948,7 +1056,7 @@ export async function mountVisualEditor({
         },
       );
       dismissPanels();
-      canvas.insert("image", asset.path);
+      await canvas.insert("image", asset.path);
     } catch (error) {
       button.disabled = false;
       onError(error);
@@ -967,7 +1075,7 @@ export async function mountVisualEditor({
       });
       const asset = assets.find((entry) => entry.name === name);
       if (!asset) throw new Error("图片上传失败");
-      canvas.insert("image", asset.path);
+      await canvas.insert("image", asset.path);
     } catch (error) {
       onError(error);
     } finally {
@@ -1116,6 +1224,7 @@ export async function mountVisualEditor({
         thumbnails.load(value.css);
         await canvas.load(value);
         canvas.setSnapping(snapping);
+        canvas.setGuideOptions(guideOptions);
         updateNotes();
       } finally {
         loading = false;

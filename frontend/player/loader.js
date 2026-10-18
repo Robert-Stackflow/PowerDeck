@@ -11,6 +11,8 @@ const parts = location.pathname
 const revision = shared
   ? null
   : new URLSearchParams(location.search).get("revision");
+const embeddedPresenter =
+  new URLSearchParams(location.search).get("embedded") === "presenter";
 let prefix;
 const frame = document.querySelector("#playerFrame");
 const loading = document.querySelector("#loading");
@@ -84,12 +86,16 @@ try {
             account.authenticated && !shared && !revision
               ? "/presenter/" + encodeURIComponent(meta.slug)
               : null,
+          compactPresenter: embeddedPresenter,
           sessionControls:
             account.authenticated && !shared && !revision
               ? { csrf: account.csrf }
               : null,
-          downloadURL:
-            shared && meta.allowDownload ? prefix + "/export?format=pdf" : null,
+          exportURL:
+            !revision &&
+            (account.authenticated || (shared && meta.allowDownload))
+              ? prefix + "/exports"
+              : null,
           saveNote:
             account.authenticated && !shared && !revision
               ? async (page, notes) => {

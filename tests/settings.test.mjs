@@ -127,6 +127,29 @@ try {
       "bottom-right",
     );
   });
+  await test("export cache retention uses the supported presets", async () => {
+    assert.equal((await ok("/site")).exportCacheMinutes, 60);
+    for (const exportCacheMinutes of [5, 30, 60, 360, 720, 1440, 10080]) {
+      assert.equal(
+        (
+          await ok("/site", "PATCH", {
+            name: "工作室",
+            exportCacheMinutes,
+          })
+        ).exportCacheMinutes,
+        exportCacheMinutes,
+      );
+    }
+    assert.equal(
+      (
+        await req("/site", "PATCH", {
+          name: "工作室",
+          exportCacheMinutes: 61,
+        })
+      ).status,
+      400,
+    );
+  });
   await test("mutable unique slugs keep IDs, content, assets and share capabilities stable", async () => {
     const favicon =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jfN0AAAAASUVORK5CYII=";

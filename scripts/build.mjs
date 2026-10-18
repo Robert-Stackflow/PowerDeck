@@ -157,6 +157,7 @@ const names = [
   "Table2",
   "ChartNoAxesColumn",
   "Clapperboard",
+  "Database",
 ];
 const selected = { ...presenterIcons };
 for (const name of names) {

@@ -2,8 +2,10 @@ import { esc } from "../api.js";
 import { icon } from "../icons.js";
 
 export function selectMarkup({ id, value, options, label, name = id }) {
-  const selected = options.find((o) => o[0] === value) || options[0];
-  return `<div class="custom-select"><input type="hidden" id="${esc(id)}" name="${esc(name)}" value="${esc(selected[0])}"><button id="${esc(id)}Trigger" type="button" class="select-trigger" role="combobox" aria-label="${esc(label)}" aria-expanded="false" aria-haspopup="listbox" aria-controls="${esc(id)}Options"><span>${esc(selected[1])}</span>${icon("chevronDown")}</button><div id="${esc(id)}Options" class="select-menu" role="listbox" aria-label="${esc(label)}" popover="auto">${options.map(([v, text], i) => `<button type="button" role="option" tabindex="-1" id="${esc(id)}Option${i}" data-value="${esc(v)}" aria-selected="${v === selected[0]}"><span>${esc(text)}</span>${icon("check")}</button>`).join("")}</div></div>`;
+  const selected = options.find((o) => o[0] === value) || options[0],
+    optionLabel = ([, text, tag]) =>
+      `${esc(text)}${tag ? `<em class="select-option-tag">${esc(tag)}</em>` : ""}`;
+  return `<div class="custom-select"><input type="hidden" id="${esc(id)}" name="${esc(name)}" value="${esc(selected[0])}"><button id="${esc(id)}Trigger" type="button" class="select-trigger" role="combobox" aria-label="${esc(label)}" aria-expanded="false" aria-haspopup="listbox" aria-controls="${esc(id)}Options"><span>${optionLabel(selected)}</span>${icon("chevronDown")}</button><div id="${esc(id)}Options" class="select-menu" role="listbox" aria-label="${esc(label)}" popover="auto">${options.map((option, i) => `<button type="button" role="option" tabindex="-1" id="${esc(id)}Option${i}" data-value="${esc(option[0])}" aria-selected="${option[0] === selected[0]}"><span>${optionLabel(option)}</span>${icon("check")}</button>`).join("")}</div></div>`;
 }
 export function enhanceSelects(root = document) {
   root.querySelectorAll(".custom-select").forEach((el) => {
@@ -58,8 +60,8 @@ export function enhanceSelects(root = document) {
     });
     const choose = (i) => {
       input.value = options[i].dataset.value;
-      trigger.querySelector("span").textContent =
-        options[i].querySelector("span").textContent;
+      trigger.querySelector(":scope > span").innerHTML =
+        options[i].querySelector(":scope > span").innerHTML;
       options.forEach((o, n) =>
         o.setAttribute("aria-selected", String(n === i)),
       );
@@ -144,7 +146,7 @@ export function setSelectValue(input, value) {
       String(option.dataset.value === value),
     );
     if (option.dataset.value === value)
-      root.querySelector(".select-trigger span").textContent =
-        option.querySelector("span").textContent;
+      root.querySelector(".select-trigger > span").innerHTML =
+        option.querySelector(":scope > span").innerHTML;
   }
 }

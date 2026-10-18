@@ -1,3 +1,5 @@
+import { waitForSlideImages } from "./media.js";
+
 export function preparePlayerFrame(frame) {
   frame.hidden = false;
   frame.classList.remove("is-ready");
@@ -6,9 +8,22 @@ export function preparePlayerFrame(frame) {
 
 export async function revealPlayerFrame(frame, loading, timeout = 1800) {
   const contentWindow = frame.contentWindow,
-    fonts = frame.contentDocument?.fonts?.ready || Promise.resolve(),
-    deadline = new Promise((resolve) => setTimeout(resolve, timeout));
-  await Promise.race([fonts.catch(() => {}), deadline]);
+    fonts = frame.contentDocument?.fonts?.ready || Promise.resolve();
+  let timer;
+  try {
+    await Promise.race([
+      Promise.all([
+        fonts.catch(() => {}),
+        waitForSlideImages(
+          frame.contentDocument?.querySelector(".slide.active"),
+          timeout,
+        ),
+      ]),
+      new Promise((resolve) => (timer = setTimeout(resolve, timeout))),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
   await new Promise((resolve) =>
     contentWindow.requestAnimationFrame(() =>
       contentWindow.requestAnimationFrame(resolve),

@@ -45,10 +45,34 @@ try {
     await page.locator("html").getAttribute("data-theme"),
     toggledTheme,
   );
+  const cachedExport = await page.evaluate(async () => {
+    const session = await fetch("/api/session").then((response) =>
+      response.json(),
+    );
+    return fetch("/api/decks/areal/exports", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": session.csrf,
+      },
+      body: JSON.stringify({ format: "html" }),
+    }).then((response) => response.json());
+  });
+  await page.waitForFunction(async (jobId) => {
+    const response = await fetch(`/api/decks/areal/exports/${jobId}`);
+    if (!response.ok) return false;
+    return (await response.json()).status === "ready";
+  }, cachedExport.id);
   await page.locator("#accountSettings").click();
   await page.getByRole("button", { name: /品牌与素材/ }).click();
   await page.locator("#brandKitForm").waitFor();
-  await page.locator('#brandKitForm input[name="primary"]').fill("#123456");
+  await page
+    .locator('#brandKitForm input[name="primary"]')
+    .evaluate((input) => {
+      input.value = "#123456";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
   await page.locator("#brandKitForm button[type=submit]").click();
   await page.locator("#brandAssetFile").setInputFiles({
     name: "brand.svg",
@@ -74,6 +98,24 @@ try {
     .locator(".workspace-user", { hasText: /editor2.*查看者/s })
     .waitFor();
   await page.screenshot({ path: path.join(dir, "members.png") });
+
+  await page.getByRole("button", { name: /缓存管理/ }).click();
+  await page.locator(".cache-table tbody tr").waitFor();
+  assert.equal(await page.locator(".cache-table tbody tr").count(), 1);
+  await page.locator("#cacheDeckTrigger").click();
+  await page.getByRole("option", { name: /areal/i }).click();
+  await page.locator("#cacheVersionTrigger").click();
+  await page
+    .getByRole("option", { name: `版本 ${cachedExport.version}` })
+    .click();
+  await page.locator(".cache-table tbody tr").waitFor();
+  await page.locator("#exportCacheMinutesTrigger").click();
+  await page.getByRole("option", { name: "6 小时" }).click();
+  await page.locator("#exportCachePolicy button[type=submit]").click();
+  await page.screenshot({ path: path.join(dir, "cache-management.png") });
+  await page.locator("#clearExportCache").click();
+  await page.locator("#dialog button[type=submit]").click();
+  await page.locator(".cache-empty").waitFor();
 
   await page.getByRole("button", { name: /备份中心/ }).click();
   await page.locator("#createBackup").click();
@@ -120,7 +162,7 @@ try {
   await projection.close();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS brand library, workspace members, backup center and audience UI",
+    "PASS brand library, members, export cache, backups and audience UI",
   );
   console.log(`Screenshots: ${dir}`);
 } finally {

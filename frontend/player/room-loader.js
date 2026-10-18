@@ -271,7 +271,7 @@ async function initialize() {
               viewerMode: true,
               viewerPermissions: room.permissions,
               interactionURL: room.interactionURL,
-              downloadURL: room.downloadURL,
+              exportURL: room.exportURL,
               initialPage: room.page,
               syncHash: false,
             });

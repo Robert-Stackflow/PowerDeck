@@ -1,6 +1,5 @@
 import { api, setSession } from "../api.js";
 import { icon } from "../icons.js";
-import { wheelNavigation } from "../components/wheel-navigation.js";
 
 const root = document.querySelector("#presenterApp");
 const slug = decodeURIComponent(
@@ -40,7 +39,7 @@ try {
   pageStats[current - 1].visits = 1;
   const channel = new BroadcastChannel(`powerdeck-presenter:${id}`);
   document.title = `${deck.title} · 演讲者视图`;
-  root.innerHTML = `<header class="presenter-topbar"><div class="presenter-title"><h1></h1><p>演讲者视图</p></div><div id="connectionStatus" class="presenter-status"><i></i><span>等待演示窗口</span></div><output id="sessionClock" class="session-clock">00:00</output></header><main class="presenter-main"><section class="presenter-card current-card"><div class="card-heading"><b>当前页面</b><span id="currentTitle"></span></div><div class="slide-frame-wrap"><iframe id="currentFrame" title="当前页面"></iframe></div></section><aside class="presenter-side"><section class="presenter-card next-card"><div class="card-heading"><b>下一页</b><span id="nextTitle"></span></div><div class="slide-frame-wrap"><iframe id="nextFrame" title="下一页"></iframe></div></section><section class="presenter-card notes-card"><div class="card-heading"><b>演讲备注</b><span id="notesPage"></span></div><div id="speakerNotes" class="speaker-notes"></div><div id="speakerRefs" class="speaker-refs" hidden><h3>参考资料</h3><div></div></div></section></aside></main><footer class="presenter-controls"><button id="previousPage" aria-label="上一页">${icon("prev")}上一页</button><div id="presenterCounter" class="presenter-counter"></div><button id="nextPage" class="primary">下一页${icon("next")}</button><button id="openProjection" class="projection-button">${icon("presentation")}打开演示窗口</button><button id="finishRehearsal">${icon("flag")}结束排练</button><button id="timerToggle" class="timer-toggle">${icon("pause")}暂停计时</button><button id="timerReset" class="timer-reset" aria-label="重置计时" title="重置计时">${icon("rotateCcw")}</button></footer><section id="rehearsalPanel" class="presenter-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="rehearsalTitle"><div class="presenter-dialog-card rehearsal-card"><button class="dialog-dismiss" type="button" aria-label="关闭">${icon("close")}</button><div><p class="dialog-eyebrow">排练报告</p><h2 id="rehearsalTitle">本次演讲复盘</h2></div><div class="rehearsal-summary"></div><div class="rehearsal-table"></div><button id="continueRehearsal" class="dialog-primary" type="button">继续排练</button></div></section>`;
+  root.innerHTML = `<header class="presenter-topbar"><div class="presenter-title"><h1></h1><p>演讲者视图</p></div><div id="connectionStatus" class="presenter-status"><i></i><span>等待演示窗口</span></div><output id="sessionClock" class="session-clock">00:00</output></header><main class="presenter-main"><section class="presenter-card current-card"><div class="card-heading"><b>当前页面</b><span id="currentTitle"></span></div><div class="slide-frame-wrap"><iframe id="currentFrame" title="当前页面"></iframe></div></section><aside class="presenter-side"><section class="presenter-card next-card"><div class="card-heading"><b>下一页</b><span id="nextTitle"></span></div><div class="slide-frame-wrap"><iframe id="nextFrame" title="下一页"></iframe></div></section><section class="presenter-card notes-card"><div class="card-heading"><b>演讲备注</b><span id="notesPage"></span></div><div id="speakerNotes" class="speaker-notes"></div><div id="speakerRefs" class="speaker-refs" hidden><h3>参考资料</h3><div></div></div></section></aside></main><footer class="presenter-controls"><button id="previousPage" aria-label="上一页">${icon("prev")}上一页</button><div id="presenterCounter" class="presenter-counter"></div><button id="nextPage" class="primary">下一页${icon("next")}</button><button id="presenterOverview">${icon("overview")}目录</button><button id="openProjection" class="projection-button">${icon("presentation")}打开演示窗口</button><button id="finishRehearsal">${icon("flag")}结束排练</button><button id="timerToggle" class="timer-toggle">${icon("pause")}暂停计时</button><button id="timerReset" class="timer-reset" aria-label="重置计时" title="重置计时">${icon("rotateCcw")}</button></footer><section id="rehearsalPanel" class="presenter-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="rehearsalTitle"><div class="presenter-dialog-card rehearsal-card"><button class="dialog-dismiss" type="button" aria-label="关闭">${icon("close")}</button><div><p class="dialog-eyebrow">排练报告</p><h2 id="rehearsalTitle">本次演讲复盘</h2></div><div class="rehearsal-summary"></div><div class="rehearsal-table"></div><button id="continueRehearsal" class="dialog-primary" type="button">继续排练</button></div></section>`;
   root.removeAttribute("aria-busy");
   root.querySelector(".presenter-title h1").textContent = deck.title;
   const $ = (selector) => root.querySelector(selector);
@@ -50,8 +49,32 @@ try {
   fullscreenButton.type = "button";
   fullscreenButton.innerHTML = `${icon("full")}全屏`;
   $("#openProjection").after(fullscreenButton);
-  for (const id of ["currentFrame", "nextFrame"])
-    $("#" + id).className = "preview-frame is-active";
+  $("#currentFrame").className = "presentation-frame is-active";
+  $("#currentFrame").allowFullscreen = true;
+  $("#currentFrame").setAttribute(
+    "allow",
+    "fullscreen; clipboard-read; clipboard-write",
+  );
+  $("#currentFrame").src =
+    `/present/${encodeURIComponent(deck.slug)}?embedded=presenter#${current}`;
+  $("#nextFrame").className = "preview-frame is-active";
+  let embeddedSyncTimer = 0;
+  function syncCurrentPresentation(page) {
+    const frame = $("#currentFrame"),
+      presentation = frame.contentWindow?.presentation;
+    frame.dataset.requestedPage = String(page);
+    if (presentation?.go) {
+      if (presentation.current !== page) presentation.go(page);
+      clearTimeout(embeddedSyncTimer);
+      embeddedSyncTimer = 0;
+      return;
+    }
+    if (embeddedSyncTimer) return;
+    embeddedSyncTimer = setTimeout(() => {
+      embeddedSyncTimer = 0;
+      syncCurrentPresentation(Number(frame.dataset.requestedPage) || 1);
+    }, 40);
+  }
   function sizePreviewFrames() {
     for (const wrap of root.querySelectorAll(".slide-frame-wrap")) {
       const style = getComputedStyle(wrap),
@@ -78,22 +101,40 @@ try {
   root
     .querySelectorAll(".slide-frame-wrap")
     .forEach((wrap) => previewObserver.observe(wrap));
-  const previewURL = () => `/api/decks/${id}/thumbnail?all=1&v=${deck.version}`;
-  function displayPreviewPage(frame, page) {
-    if (!frame.dataset.ready) return;
-    const previous = frame._activePreview,
-      next = frame._previewPages?.get(page);
-    if (!next || previous === next) return;
-    if (previous) {
-      previous.style.setProperty("display", "none", "important");
-      previous.removeAttribute("data-presenter-preview-active");
-      previous.setAttribute("aria-hidden", "true");
+  const previewURL = (page) =>
+    `/api/decks/${id}/thumbnail?page=${page}&v=${deck.version}`;
+  function loadedPreviewPage(frame) {
+    try {
+      return Number(
+        new URL(frame.contentWindow.location.href).searchParams.get("page"),
+      );
+    } catch {
+      return 0;
     }
-    next.style.setProperty("display", "block", "important");
-    next.setAttribute("data-presenter-preview-active", "true");
-    next.setAttribute("aria-hidden", "false");
-    frame._activePreview = next;
+  }
+  function prepareLoadedPreview(frame) {
+    const page = loadedPreviewPage(frame),
+      slide = frame.contentDocument?.querySelector(".slide"),
+      wrap = frame.closest(".slide-frame-wrap");
+    if (!page || !slide) return;
+    slide.setAttribute("data-presenter-preview-active", "true");
+    slide.setAttribute("aria-hidden", "false");
     frame.dataset.page = String(page);
+    frame.dataset.ready = "true";
+    if (wrap.dataset.requestedPage === String(page))
+      wrap.classList.remove("is-loading");
+  }
+  function loadPreviewPage(frame, page) {
+    frame.dataset.requestedPage = String(page);
+    if (frame.dataset.ready && Number(frame.dataset.page) === page) {
+      frame.closest(".slide-frame-wrap").classList.remove("is-loading");
+      return;
+    }
+    const url = previewURL(page);
+    if (frame.getAttribute("src") === url) return;
+    delete frame.dataset.ready;
+    frame.closest(".slide-frame-wrap").classList.add("is-loading");
+    frame.src = url;
   }
   function updatePreview(card, frameId, page) {
     const wrap = root.querySelector(`${card} .slide-frame-wrap`),
@@ -106,31 +147,9 @@ try {
     }
     wrap.classList.remove("is-empty");
     frame.classList.add("is-active");
-    displayPreviewPage(frame, page);
+    loadPreviewPage(frame, page);
   }
-  for (const id of ["currentFrame", "nextFrame"]) {
-    const frame = $("#" + id);
-    frame.onload = () => {
-      frame._previewPages = new Map(
-        [...frame.contentDocument.querySelectorAll(".slide")].map((slide) => [
-          Number(slide.dataset.page),
-          slide,
-        ]),
-      );
-      frame._activePreview =
-        frame.contentDocument.querySelector('[data-page="1"]');
-      frame._activePreview?.setAttribute(
-        "data-presenter-preview-active",
-        "true",
-      );
-      frame.dataset.ready = "true";
-      displayPreviewPage(
-        frame,
-        Number(frame.closest(".slide-frame-wrap").dataset.requestedPage) || 1,
-      );
-    };
-    frame.src = previewURL();
-  }
+  $("#nextFrame").onload = () => prepareLoadedPreview($("#nextFrame"));
   function noteAt(page) {
     return (
       content.notes?.[page] || { title: `第 ${page} 页`, notes: "", refs: [] }
@@ -140,7 +159,7 @@ try {
     const note = noteAt(current),
       next = current < deck.slideCount ? noteAt(current + 1) : null;
     location.hash = String(current);
-    updatePreview(".current-card", "currentFrame", current);
+    syncCurrentPresentation(current);
     $("#currentTitle").textContent = note.title || `第 ${current} 页`;
     $("#nextTitle").textContent = next
       ? next.title || `第 ${current + 1} 页`
@@ -190,7 +209,7 @@ try {
       : "等待演示窗口";
   }
   let pendingStatePage = null,
-    stateFrame = 0;
+    stateTimer = 0;
   channel.onmessage = ({ data }) => {
     if (data?.type === "notes") {
       const note = noteAt(data.page);
@@ -203,15 +222,19 @@ try {
     lastStateAt = performance.now();
     updateConnection();
     pendingStatePage = data.current;
-    if (stateFrame) return;
-    stateFrame = requestAnimationFrame(() => {
-      stateFrame = 0;
+    clearTimeout(stateTimer);
+    stateTimer = setTimeout(() => {
+      stateTimer = 0;
+      if (pendingStatePage === current) return;
       go(pendingStatePage, false);
-    });
+      channel.postMessage({ type: "go", page: current });
+    }, 32);
   };
   $("#previousPage").onclick = () => go(current - 1);
   $("#nextPage").onclick = () => go(current + 1);
-  for (const preview of root.querySelectorAll(".slide-frame-wrap")) {
+  $("#presenterOverview").onclick = () =>
+    $("#currentFrame").contentWindow?.presentation?.toggleOverview();
+  for (const preview of root.querySelectorAll(".next-card .slide-frame-wrap")) {
     preview.tabIndex = 0;
     preview.setAttribute("role", "button");
     preview.setAttribute("aria-label", "前往下一页");
@@ -222,15 +245,6 @@ try {
       go(current + 1);
     };
   }
-  const handleWheel = wheelNavigation((direction) => go(current + direction));
-  addEventListener(
-    "wheel",
-    (event) => {
-      if (event.target.closest(".speaker-notes,.speaker-refs")) return;
-      if (handleWheel(event)) event.preventDefault();
-    },
-    { passive: false },
-  );
   $("#openProjection").onclick = () => {
     const projection = open(
       `/present/${encodeURIComponent(deck.slug)}#${current}`,
@@ -348,7 +362,7 @@ try {
       lastClock = clock;
       $("#sessionClock").textContent = clock;
     }
-    if (now - lastRequestAt > (connected ? 2500 : 800)) {
+    if (!connected && now - lastRequestAt > 800) {
       channel.postMessage({ type: "request" });
       lastRequestAt = now;
     }
@@ -358,7 +372,8 @@ try {
     }
   }, 250);
   addEventListener("beforeunload", () => {
-    cancelAnimationFrame(stateFrame);
+    clearTimeout(stateTimer);
+    clearTimeout(embeddedSyncTimer);
     previewObserver.disconnect();
     channel.close();
   });

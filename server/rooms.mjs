@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
 
-const MAX_AGE = 8 * 60 * 60 * 1000;
+const ADMISSION_MAX_AGE = 8 * 60 * 60 * 1000;
 const DEFAULT_PERMISSIONS = Object.freeze({
   directory: true,
   notes: false,
   interaction: true,
-  downloadPdf: false,
+  download: false,
   showInteractionFeed: true,
   showOnlineCount: true,
 });
@@ -17,13 +17,22 @@ const passwordDigest = (password, salt = crypto.randomBytes(16)) => ({
 });
 const clampPage = (value, total) =>
   Math.max(1, Math.min(total, Math.trunc(Number(value) || 1)));
-const cleanPermissions = (value = {}) =>
-  Object.fromEntries(
+const cleanPermissions = (value = {}) => {
+  const normalized = { ...value };
+  if (
+    typeof normalized.download !== "boolean" &&
+    typeof normalized.downloadPdf === "boolean"
+  )
+    normalized.download = normalized.downloadPdf;
+  return Object.fromEntries(
     Object.keys(DEFAULT_PERMISSIONS).map((key) => [
       key,
-      typeof value[key] === "boolean" ? value[key] : DEFAULT_PERMISSIONS[key],
+      typeof normalized[key] === "boolean"
+        ? normalized[key]
+        : DEFAULT_PERMISSIONS[key],
     ]),
   );
+};
 
 export function createRooms(store, publicURL = "") {
   const rooms = new Map(),
@@ -31,29 +40,35 @@ export function createRooms(store, publicURL = "") {
   db.exec(`CREATE TABLE IF NOT EXISTS presentation_rooms(
     token TEXT PRIMARY KEY,
     deck_id TEXT NOT NULL,
+    owner_id TEXT,
     state TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     touched_at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS presentation_rooms_touched
     ON presentation_rooms(touched_at DESC);`);
+  const roomColumns = db.prepare("PRAGMA table_info(presentation_rooms)").all();
+  if (!roomColumns.some((column) => column.name === "owner_id"))
+    db.exec("ALTER TABLE presentation_rooms ADD COLUMN owner_id TEXT");
   const saveRoom = db.prepare(`INSERT INTO presentation_rooms(
-      token,deck_id,state,created_at,touched_at
-    ) VALUES(?,?,?,?,?)
+      token,deck_id,owner_id,state,created_at,touched_at
+    ) VALUES(?,?,?,?,?,?)
     ON CONFLICT(token) DO UPDATE SET
       deck_id=excluded.deck_id,
+      owner_id=excluded.owner_id,
       state=excluded.state,
       created_at=excluded.created_at,
       touched_at=excluded.touched_at`),
     deleteRoom = db.prepare("DELETE FROM presentation_rooms WHERE token=?"),
     savedRooms = db.prepare(
-      "SELECT state FROM presentation_rooms WHERE touched_at>? ORDER BY touched_at",
+      "SELECT owner_id,state FROM presentation_rooms ORDER BY touched_at",
     );
 
   function serializable(room) {
     return {
       token: room.token,
       hostToken: room.hostToken,
+      ownerId: room.ownerId,
       deckId: room.deckId,
       title: room.title,
       total: room.total,
@@ -76,6 +91,7 @@ export function createRooms(store, publicURL = "") {
     saveRoom.run(
       room.token,
       room.deckId,
+      room.ownerId,
       JSON.stringify(serializable(room)),
       room.createdAt,
       room.touchedAt,
@@ -95,12 +111,15 @@ export function createRooms(store, publicURL = "") {
     deleteRoom.run(roomToken);
   }
 
-  for (const row of savedRooms.all(Date.now() - MAX_AGE)) {
+  for (const row of savedRooms.all()) {
     try {
       const saved = JSON.parse(row.state),
-        deck = store.get(saved.deckId),
+        ownerId = row.owner_id || saved.ownerId;
+      if (!ownerId) continue;
+      const deck = store.get(saved.deckId),
         room = {
           ...saved,
+          ownerId,
           title: deck.title,
           total: deck.slideCount,
           page: clampPage(saved.page, deck.slideCount),
@@ -116,17 +135,9 @@ export function createRooms(store, publicURL = "") {
       rooms.set(room.token, room);
     } catch {}
   }
-  db.prepare("DELETE FROM presentation_rooms WHERE touched_at<=?").run(
-    Date.now() - MAX_AGE,
-  );
 
   function get(roomToken) {
-    const room = rooms.get(roomToken);
-    if (!room || Date.now() - room.touchedAt > MAX_AGE) {
-      if (room) forget(roomToken);
-      return null;
-    }
-    return room;
+    return rooms.get(roomToken) || null;
   }
 
   function connectionList(room) {
@@ -148,6 +159,9 @@ export function createRooms(store, publicURL = "") {
       interactionToken: room.permissions.interaction
         ? room.interactionToken
         : null,
+      exportURL: room.permissions.download
+        ? `/api/rooms/${encodeURIComponent(room.token)}/exports`
+        : null,
       participants: connectionList(room).length,
       updatedAt: room.touchedAt,
       passwordProtected: !!room.password,
@@ -164,9 +178,6 @@ export function createRooms(store, publicURL = "") {
   }
 
   function list() {
-    const now = Date.now();
-    for (const [roomToken, room] of rooms)
-      if (now - room.touchedAt > MAX_AGE) forget(roomToken);
     return [...rooms.values()]
       .map((room) => ({
         token: room.token,
@@ -185,6 +196,15 @@ export function createRooms(store, publicURL = "") {
         updatedAt: room.touchedAt,
       }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  function owned(deckId, ownerId) {
+    if (!deckId || !ownerId) return null;
+    return (
+      [...rooms.values()]
+        .filter((room) => room.deckId === deckId && room.ownerId === ownerId)
+        .sort((a, b) => b.touchedAt - a.touchedAt)[0] || null
+    );
   }
 
   function send(client, message) {
@@ -215,13 +235,21 @@ export function createRooms(store, publicURL = "") {
     );
   }
 
-  function create({ deckId, page, permissions, interactionToken, password }) {
+  function create({
+    deckId,
+    ownerId,
+    page,
+    permissions,
+    interactionToken,
+    password,
+  }) {
     const deck = store.get(deckId),
       roomToken = token(),
       hostToken = token(),
       room = {
         token: roomToken,
         hostToken,
+        ownerId,
         deckId: deck.id,
         title: deck.title,
         total: deck.slideCount,
@@ -243,12 +271,12 @@ export function createRooms(store, publicURL = "") {
     room.url = `${publicURL}/room/${roomToken}`;
     rooms.set(roomToken, room);
     persistNow(room);
-    return adminState(room);
+    return room;
   }
 
   function admission(room, admissionToken) {
     const value = admissionToken && room.admissions.get(admissionToken);
-    if (!value || Date.now() - value.joinedAt > MAX_AGE) return null;
+    if (!value || Date.now() - value.joinedAt > ADMISSION_MAX_AGE) return null;
     return value;
   }
 
@@ -352,11 +380,18 @@ export function createRooms(store, publicURL = "") {
     const room = requireHost(roomToken, hostToken);
     if (Number.isFinite(input.page))
       room.page = clampPage(input.page, room.total);
-    if (input.permissions)
+    if (input.permissions) {
+      const changes = { ...input.permissions };
+      if (
+        !Object.hasOwn(changes, "download") &&
+        typeof changes.downloadPdf === "boolean"
+      )
+        changes.download = changes.downloadPdf;
       room.permissions = cleanPermissions({
         ...room.permissions,
-        ...input.permissions,
+        ...changes,
       });
+    }
     if (Object.hasOwn(input, "password")) {
       const password = String(input.password || "").trim();
       room.password = password ? passwordDigest(password) : null;
@@ -431,6 +466,11 @@ export function createRooms(store, publicURL = "") {
         return;
       }
       if (message.type === "ping") {
+        if (client.role === "host") {
+          room.touchedAt = Date.now();
+          client.connection.lastSeen = room.touchedAt;
+          persistSoon(room);
+        }
         send(client, { type: "pong", at: Number(message.at) || Date.now() });
         return;
       }
@@ -491,18 +531,6 @@ export function createRooms(store, publicURL = "") {
     });
   }
 
-  const cleanup = setInterval(
-    () => {
-      for (const [roomToken, room] of rooms)
-        if (Date.now() - room.touchedAt > MAX_AGE) {
-          for (const client of room.clients) client.ws.close(1001, "expired");
-          forget(roomToken);
-        }
-    },
-    10 * 60 * 1000,
-  );
-  cleanup.unref?.();
-
   return {
     create,
     get,
@@ -512,12 +540,12 @@ export function createRooms(store, publicURL = "") {
     publicState,
     adminState,
     list,
+    owned,
     update,
     remove,
     requireHost,
     attach,
     close() {
-      clearInterval(cleanup);
       for (const room of rooms.values()) {
         persistNow(room);
         for (const client of room.clients) client.ws.close(1001, "shutdown");

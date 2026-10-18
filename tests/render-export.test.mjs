@@ -82,6 +82,25 @@ try {
       2,
     );
   });
+  await test("standalone HTML embeds assets and the offline presentation runtime", async () => {
+    const response = await fetch(
+      `${base}/api/decks/${deck.id}/export?format=html`,
+      { headers: { Cookie: cookie } },
+    );
+    assert.equal(response.status, 200, await response.clone().text());
+    assert.equal(
+      response.headers.get("content-type"),
+      "text/html; charset=utf-8",
+    );
+    assert.match(response.headers.get("content-disposition"), /\.html/);
+    const html = await response.text();
+    assert.match(html, /data:image\/png;base64,/);
+    assert.match(html, /mountPresenter/);
+    assert.match(html, /id="controls"/);
+    assert.match(html, /id="presentationTimer"|mountTimer/);
+    assert.doesNotMatch(html, /(?:src|href)="assets\//);
+    assert.doesNotMatch(html, /<script[^>]+src=|<link\b/i);
+  });
   await test("rendering refuses external assets without making network requests", async () => {
     app.store.save(deck.id, {
       version: app.store.get(deck.id).version,

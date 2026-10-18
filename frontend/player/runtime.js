@@ -2,6 +2,7 @@ import { mountTimer } from "./timer.js";
 import { createToast } from "../components/toast.js";
 import { createLightbox } from "./lightbox.js";
 import { wheelNavigation } from "../components/wheel-navigation.js";
+import { loadSlideImages, waitForSlideImages } from "./media.js";
 export function mountPresenter({
   window,
   hostWindow = window,
@@ -14,8 +15,9 @@ export function mountPresenter({
   onExit = null,
   editURL = null,
   presenterURL = null,
+  compactPresenter = false,
   sessionControls = null,
-  downloadURL = null,
+  exportURL = null,
   saveNote = null,
   syncHash = true,
   viewerMode = false,
@@ -93,7 +95,9 @@ export function mountPresenter({
     ["#244a96", "深蓝"],
     ["#b632e7", "紫色"],
   ];
+  const exportStates = new Map();
   let current = 1,
+    exportSyncPromise = null,
     tool = "pointer",
     lastPaint = "pen",
     hideTimer,
@@ -101,7 +105,6 @@ export function mountPresenter({
     drawing = null,
     touchStart = null,
     clickStart = null,
-    imageClickTimer,
     dockPressed = false,
     dockTouch = null,
     remoteSession = null,
@@ -112,12 +115,16 @@ export function mountPresenter({
     roomPointerTimer = 0,
     roomInkSyncTimer = 0,
     roomInkSyncPage = 0,
+    presenterInkSyncTimer = 0,
+    presenterInkSyncPage = 0,
+    presenterPointerAt = 0,
     roomPingInterval = 0,
     roomReconnectTimer = 0,
     roomReconnectDelay = 700,
     roomSocketGeneration = 0,
     roomRestoreTimer = 0,
     roomRestoreDelay = 700,
+    roomRestoreState = presenterURL ? "restoring" : "idle",
     roomLatency = null,
     roomFeedState = null,
     roomFeedSignature = "",
@@ -200,9 +207,16 @@ export function mountPresenter({
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;");
   const presenterChannel =
-    presenterURL && typeof hostWindow.BroadcastChannel === "function"
+    (presenterURL || compactPresenter) &&
+    typeof hostWindow.BroadcastChannel === "function"
       ? new hostWindow.BroadcastChannel(`powerdeck-presenter:${deckId}`)
       : null;
+  const presenterInstanceId = hostWindow.crypto.randomUUID();
+  const presenterPost = (message) =>
+    presenterChannel?.postMessage({
+      ...message,
+      source: presenterInstanceId,
+    });
   let eatClickUntil = 0;
   let menuReturn = null,
     menuAnchor = null,
@@ -310,6 +324,7 @@ export function mountPresenter({
     persist();
     syncUI();
     syncRoomInk();
+    syncPresenterInk();
   }
   function redo() {
     finishDraw();
@@ -321,6 +336,7 @@ export function mountPresenter({
     persist();
     syncUI();
     syncRoomInk();
+    syncPresenterInk();
   }
   function clearInk() {
     finishDraw();
@@ -330,6 +346,7 @@ export function mountPresenter({
     checkpoint(before);
     renderInk();
     syncRoomInk();
+    syncPresenterInk();
   }
   function pathData(points) {
     if (points.length === 1) return `M${points[0][0]} ${points[0][1]}h.01`;
@@ -372,6 +389,23 @@ export function mountPresenter({
       roomInkSyncTimer = 0;
       syncRoomInk(roomInkSyncPage);
     }, 40);
+  }
+  function syncPresenterInk(page = current) {
+    if (!presenterChannel || viewerMode) return;
+    presenterPost({
+      type: "ink",
+      page,
+      strokes: clone(annotations[page] || []),
+    });
+  }
+  function schedulePresenterInkSync(page = current) {
+    if (!presenterChannel || viewerMode) return;
+    presenterInkSyncPage = page;
+    if (presenterInkSyncTimer) return;
+    presenterInkSyncTimer = hostWindow.setTimeout(() => {
+      presenterInkSyncTimer = 0;
+      syncPresenterInk(presenterInkSyncPage);
+    }, 32);
   }
   for (let n = 1; n <= total; n++) renderInk(n);
 
@@ -418,9 +452,11 @@ export function mountPresenter({
     ],
     roomFeedMarkup = (host = false) =>
       `<aside id="roomLiveFeed" class="room-live-feed${host ? " room-host-only" : ""}" aria-live="polite"><button id="roomFeedToggle" class="room-feed-toggle" type="button" aria-label="收起互动评论" aria-expanded="true"><span class="room-feed-presence"><span>${ico("users")}<b id="roomFeedOnline">1</b></span><span>${ico("latency")}<em id="roomFeedLatency">连接中</em></span></span><span class="room-feed-idle" hidden>···</span><span class="room-feed-collapse" aria-hidden="true">${ico("down")}</span><i class="room-feed-unread" hidden>0</i></button><div class="room-feed-expanded"><div id="roomFeedItems"></div><form id="roomFeedComposer" class="room-feed-composer" data-host="${host}"><div class="room-emoji-picker" hidden><div>${roomEmojis.map((emoji) => `<button type="button" data-room-emoji-value="${emoji}" aria-label="插入 ${emoji}">${emoji}</button>`).join("")}</div></div><button type="button" class="room-emoji-toggle" aria-label="选择 Emoji" aria-expanded="false">${ico("smile")}</button><input name="body" maxlength="500" autocomplete="off" placeholder="发表评论…" aria-label="发表评论"><button type="submit" class="room-comment-send" aria-label="发送评论">${ico("next")}</button></form></div><div id="roomFeedToasts" class="room-feed-toasts" aria-live="polite"></div></aside>`;
-  const sessionToolsMarkup = presenterURL
-    ? `<span class="nav-divider session-divider" aria-hidden="true"></span><div class="session-control-group" role="group" aria-label="演讲辅助">${dockButton("presenterViewBtn", "presenter", "演讲者视图")}${dockButton("remoteControlBtn", "smartphone", "手机遥控")}${dockButton("roomBtn", "room", "房间")}</div>`
-    : "";
+  const sessionToolsMarkup =
+    presenterURL && !compactPresenter
+      ? `<span class="nav-divider session-divider" aria-hidden="true"></span><div class="session-control-group" role="group" aria-label="演讲辅助">${dockButton("presenterViewBtn", "presenter", "演讲者视图")}${dockButton("remoteControlBtn", "smartphone", "手机遥控")}${dockButton("roomBtn", "room", "房间")}</div>`
+      : "";
+  const backgroundExportAvailable = () => !!exportURL && !compactPresenter;
   dock.innerHTML =
     '<div id="dockTools" class="dock-tools">' +
     dockButton("prev", "prev", "上一页 ←") +
@@ -441,6 +477,14 @@ export function mountPresenter({
     dockButton("notesBtn", "notes", "备注 N") +
     (editURL ? dockButton("editBtn", "edit", "编辑当前页") : "") +
     dockButton("fullscreenBtn", "full", "全屏 F") +
+    (backgroundExportAvailable()
+      ? dockButton(
+          "exportBtn",
+          "export",
+          "导出",
+          'aria-haspopup="menu" aria-expanded="false"',
+        )
+      : "") +
     dockButton(
       "moreBtn",
       "more",
@@ -458,7 +502,6 @@ export function mountPresenter({
       "laserBtn",
       "inkBtn",
       "undoBtn",
-      "moreBtn",
       "editBtn",
     ])
       if ($(id)) $(id).hidden = true;
@@ -487,14 +530,29 @@ export function mountPresenter({
             ) +
             "</div>",
         );
-    if (downloadURL)
-      dock
-        .querySelector("#dockTools")
-        .insertAdjacentHTML(
-          "beforeend",
-          dockButton("roomDownloadBtn", "print", "下载 PDF"),
-        );
     document.body.classList.add("room-viewer");
+  }
+  if (compactPresenter) {
+    for (const id of [
+      "prev",
+      "counter",
+      "next",
+      "overviewBtn",
+      "notesBtn",
+      "editBtn",
+      "undoBtn",
+      "fullscreenBtn",
+      "exportBtn",
+      "moreBtn",
+      "presenterViewBtn",
+      "remoteControlBtn",
+      "roomBtn",
+    ])
+      if ($(id)) $(id).hidden = true;
+    dock
+      .querySelectorAll(".nav-divider,.session-control-group")
+      .forEach((element) => element.setAttribute("hidden", ""));
+    document.body.classList.add("compact-presenter");
   }
   const ui = document.createElement("div");
   ui.id = "presenterUI";
@@ -503,12 +561,16 @@ export function mountPresenter({
     (viewerMode
       ? `${viewerPermissions.interaction && (viewerPermissions.showInteractionFeed || viewerPermissions.showOnlineCount) ? roomFeedMarkup() : ""}`
       : "") +
-    (presenterURL
+    (presenterURL && !compactPresenter
       ? `<section id="remoteControlPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="remoteControlTitle"><div class="session-dialog-card remote-session-card"><div class="overlay-head"><div><p class="session-kicker">演讲辅助</p><h2 id="remoteControlTitle">手机遥控</h2><span>扫码连接后即可控制演示</span></div><button class="dialog-close" type="button" data-close="remoteControlPanel" aria-label="关闭手机遥控">${ico("close")}</button></div><div id="remoteSessionBody" class="session-loading">正在创建遥控会话…</div></div></section><section id="roomPanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="roomTitle"><div class="session-dialog-card room-session-card"><div class="overlay-head"><div><p class="session-kicker">同步放映</p><h2 id="roomTitle">房间</h2><span>让观众同步观看当前演示</span></div><button class="dialog-close" type="button" data-close="roomPanel" aria-label="关闭房间">${ico("close")}</button></div><div id="roomBody" class="session-loading">正在创建房间…</div></div></section><section id="audiencePanel" class="overlay session-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="audienceTitle"><div class="session-dialog-card audience-session-card"><div class="overlay-head"><div><p class="session-kicker">房间互动</p><h2 id="audienceTitle">观众互动</h2><span>评论、投票、评分</span></div><button class="dialog-close" type="button" data-close="audiencePanel" aria-label="关闭观众互动">${ico("close")}</button></div><div id="audienceSetup" class="session-loading">正在开启观众互动…</div><div id="audienceDashboard" hidden></div></div></section>`
       : viewerMode
         ? `<section id="roomPollPanel" class="room-poll-popover" hidden aria-label="投票"><div class="room-poll-popover-head"><div><b>投票</b></div><button type="button" data-close-room-polls aria-label="关闭投票">${ico("close")}</button></div><div id="roomPollBody"></div></section><div id="roomRatingPopover" class="room-rating-popover" hidden></div>`
         : "");
   document.body.append(ui);
+  const exportNotifications = document.createElement("aside");
+  exportNotifications.id = "playerExportNotifications";
+  exportNotifications.setAttribute("aria-live", "polite");
+  if (backgroundExportAvailable()) document.body.append(exportNotifications);
   bindRoomFeedComposer();
   if (viewerMode) applyRoomFeedPermissions(viewerPermissions);
   if ($("roomPollPanel"))
@@ -525,7 +587,7 @@ export function mountPresenter({
   const lightbox = createLightbox({
     element: fv,
     icon: ico,
-    close: dismissPanel,
+    close: () => dismissPanel(true),
   });
   $("stage").tabIndex = -1;
   document
@@ -623,20 +685,57 @@ export function mountPresenter({
         document.fullscreenElement ? "exitFull" : "full",
         "F",
       );
-    $("moreMenu").innerHTML =
-      (onExit ? row("exit", "返回演示库", "arrowLeft", "") + menuRule : "") +
-      row("overview", "目录 / 跳转", "overview", "G") +
-      (allowNotes ? row("notes", "备注", "notes", "N") : "") +
-      (presenterURL ? row("presenter", "演讲者视图", "presenter", "") : "") +
-      (presenterURL ? row("remote", "手机遥控", "smartphone", "") : "") +
-      (presenterURL ? row("room", "房间", "room", "") : "") +
-      menuRule +
-      row("undo", "撤销墨迹", "undo", "⌘Z", !canUndo) +
-      row("redo", "重做墨迹", "redo", "⇧⌘Z", !canRedo) +
-      clear +
-      menuRule +
-      (downloadURL ? row("download", "下载 PDF", "print") : "") +
-      row("print", "打印 / 另存 PDF", "print");
+    $("moreMenu").innerHTML = viewerMode
+      ? row("print", "打印", "print")
+      : (onExit ? row("exit", "返回演示库", "arrowLeft", "") + menuRule : "") +
+        row("overview", "目录 / 跳转", "overview", "G") +
+        (allowNotes ? row("notes", "备注", "notes", "N") : "") +
+        (presenterURL ? row("presenter", "演讲者视图", "presenter", "") : "") +
+        (presenterURL ? row("remote", "手机遥控", "smartphone", "") : "") +
+        (presenterURL ? row("room", "房间", "room", "") : "") +
+        menuRule +
+        row("undo", "撤销墨迹", "undo", "⌘Z", !canUndo) +
+        row("redo", "重做墨迹", "redo", "⇧⌘Z", !canRedo) +
+        clear +
+        menuRule +
+        row("print", "打印", "print");
+  }
+  const exportFormats = [
+    ["zip", "ZIP 内容包", "用于重新导入和继续编辑", "overview"],
+    ["pdf", "PDF 文档", "适合阅读、打印与发送", "print"],
+    ["pptx", "PowerPoint", "每页以高清图片保存", "presenter"],
+    ["html", "单文件网页", "离线双击即可放映", "external"],
+  ];
+  function showExportFormats(showBack = false, focus = true) {
+    const menu = $("moreMenu");
+    menu.innerHTML =
+      (showBack ? row("export-back", "返回", "prev") + menuRule : "") +
+      '<p class="context-heading">导出格式</p>' +
+      exportFormats
+        .map(([format, label, description, glyph]) => {
+          const state = exportStates.get(format),
+            busy = ["queued", "running"].includes(state?.status),
+            ready = state?.status === "ready";
+          return `<button class="menu-row export-format-row" data-action="${ready ? `export-download:${format}` : `export:${format}`}" ${busy ? "disabled" : ""}>${ico(glyph)}<span><span class="export-format-label">${label}</span><small>${busy ? "正在后台生成，可继续放映" : ready ? "已生成，点击直接下载" : description}</small></span>${busy ? `<i class="export-format-state is-loading">${ico("loading")}</i>` : ready ? `<i class="export-format-state is-ready">${ico("export")}</i>` : ""}</button>`;
+        })
+        .join("");
+    if (focus)
+      menu
+        .querySelector("button:not(:disabled)")
+        ?.focus({ preventScroll: true });
+  }
+  function openExportFormats(anchor) {
+    showMenu("moreMenu", { anchor });
+    const menu = $("moreMenu");
+    if (menu.hidden) return;
+    showExportFormats(false);
+    const r = anchor.getBoundingClientRect();
+    placeMenu(
+      menu,
+      r.left - 20,
+      r.top - menu.getBoundingClientRect().height - 14,
+    );
+    void syncExportStates();
   }
   function syncUI() {
     $("prev").disabled = current === 1;
@@ -811,6 +910,7 @@ export function mountPresenter({
     );
     $("inkBtn").setAttribute("aria-expanded", "false");
     $("moreBtn").setAttribute("aria-expanded", "false");
+    $("exportBtn")?.setAttribute("aria-expanded", "false");
     document.body.classList.remove("menu-open", "context-open");
     if (was && restore)
       (menuReturn?.isConnected ? menuReturn : $("stage")).focus({
@@ -852,6 +952,8 @@ export function mountPresenter({
     } else showDock(5000);
     if (id === "toolMenu") $("inkBtn").setAttribute("aria-expanded", "true");
     if (id === "moreMenu") $("moreBtn").setAttribute("aria-expanded", "true");
+    if (id === "moreMenu" && anchor?.id === "exportBtn")
+      anchor.setAttribute("aria-expanded", "true");
     if (keyboard)
       el.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
   }
@@ -916,7 +1018,11 @@ export function mountPresenter({
     });
     el.querySelector("button")?.focus({ preventScroll: true });
   }
-  function dismissPanel() {
+  function dismissPanel(fromLightbox = false) {
+    if (!fromLightbox && !$("figureViewer").hidden) {
+      lightbox.requestClose();
+      return;
+    }
     if (!$("figureViewer").hidden && figureReturn) {
       const back = figureReturn;
       figureReturn = null;
@@ -991,7 +1097,7 @@ export function mountPresenter({
         status.textContent = "保存中…";
         try {
           await saveNote(page, value);
-          presenterChannel?.postMessage({ type: "notes", page, notes: value });
+          presenterPost({ type: "notes", page, notes: value });
           if (d.notes === value) status.textContent = "已保存";
           else {
             status.textContent = "有新的修改尚未保存";
@@ -1031,9 +1137,6 @@ export function mountPresenter({
         img.className = "zoomable";
         img.src = f.src;
         img.alt = f.title;
-        img.tabIndex = 0;
-        img.setAttribute("role", "button");
-        img.setAttribute("aria-label", "放大查看：" + f.title);
         const cap = document.createElement("figcaption");
         cap.textContent = f.title;
         fig.append(img, cap);
@@ -1061,30 +1164,37 @@ export function mountPresenter({
     return Number.isFinite(n) && n >= 1 && n <= total ? Math.trunc(n) : 1;
   };
   pages.forEach((page) => page.setAttribute("aria-hidden", "true"));
-  let prepareJob;
-  function prepareNeighbors() {
-    if (prepareJob) window.cancelIdleCallback?.(prepareJob);
+  let prepareJob,
+    prepareGeneration = 0;
+  async function prepareNeighbors() {
+    const generation = ++prepareGeneration;
+    if (prepareJob) {
+      window.cancelIdleCallback?.(prepareJob);
+      window.cancelAnimationFrame(prepareJob);
+    }
+    // Do not let speculative requests compete with the slide being opened.
+    pages.forEach((page) => page.classList.remove("is-prepared"));
+    await waitForSlideImages(pages[current - 1]);
+    if (generation !== prepareGeneration) return;
     const run = () => {
+      if (generation !== prepareGeneration) return;
       pages.forEach((page, index) => {
         const nearby = Math.abs(index - current + 1) === 1;
         page.classList.toggle("is-prepared", nearby);
-        if (nearby)
-          page
-            .querySelectorAll("img")
-            .forEach((img) => img.decode?.().catch(() => {}));
+        if (nearby) loadSlideImages(page, "low");
       });
     };
     if (window.requestIdleCallback)
       prepareJob = window.requestIdleCallback(run, { timeout: 300 });
-    else requestAnimationFrame(run);
+    else prepareJob = window.requestAnimationFrame(run);
   }
   function go(n, hash = true) {
-    clearTimeout(imageClickTimer);
+    hideImagePreview();
     finishDraw();
     const next = Math.max(1, Math.min(total, Math.trunc(n)));
     if (next === current && pages[next - 1].classList.contains("active")) {
       if (hash) historyReplace(current);
-      presenterChannel?.postMessage({ type: "state", current, total });
+      presenterPost({ type: "state", current, total });
       return;
     }
     const previous = pages[current - 1];
@@ -1094,6 +1204,7 @@ export function mountPresenter({
       previous.classList.remove("transition-enter");
       previous.setAttribute("aria-hidden", "true");
     }
+    loadSlideImages(pages[current - 1]);
     pages[current - 1].classList.add("active");
     pages[current - 1].classList.remove("transition-enter");
     if (pages[current - 1].dataset.transition !== "none") {
@@ -1102,7 +1213,7 @@ export function mountPresenter({
     }
     pages[current - 1].classList.remove("is-prepared");
     pages[current - 1].setAttribute("aria-hidden", "false");
-    if (viewerMode) $("roomPointer")?.classList.remove("visible");
+    $("roomPointer")?.classList.remove("visible");
     closeMenus();
     hideCursors();
     syncUI();
@@ -1116,7 +1227,7 @@ export function mountPresenter({
       );
     if (hash) historyReplace(current);
     document.title = current + "/" + total + " · " + data[current].title;
-    presenterChannel?.postMessage({ type: "state", current, total });
+    presenterPost({ type: "state", current, total });
     if (!$("notes").hidden) renderNotes();
     prepareNeighbors();
     updateToolCursor();
@@ -1132,6 +1243,7 @@ export function mountPresenter({
       Math.min(window.innerWidth / width, window.innerHeight / height),
     );
     if (openMenu()) closeMenus();
+    hideImagePreview();
     hideCursors();
   }
   async function full() {
@@ -1145,7 +1257,17 @@ export function mountPresenter({
       toast("请使用浏览器的全屏功能");
     }
   }
-  function setTool(t) {
+  function syncPresenterTool() {
+    if (!presenterChannel || viewerMode) return;
+    presenterPost({
+      type: "tool",
+      tool,
+      lastPaint,
+      colors: { ...inkColors },
+      widths: { ...widths },
+    });
+  }
+  function setTool(t, broadcast = true) {
     if (!Object.hasOwn(toolNames, t)) return;
     finishDraw();
     tool = t;
@@ -1155,6 +1277,7 @@ export function mountPresenter({
     syncUI();
     $("stage").focus({ preventScroll: true });
     updateToolCursor();
+    if (broadcast) syncPresenterTool();
   }
   async function copySessionLink(button, value) {
     try {
@@ -1426,6 +1549,16 @@ export function mountPresenter({
       toggle = $("roomFeedToggle"),
       badge = feed?.querySelector(".room-feed-unread");
     if (!feed || !toggle) return;
+    const heroSources =
+      !collapsed && feed.classList.contains("collapsed")
+        ? [...feed.querySelectorAll(".room-feed-toasts article:not(.leaving)")]
+            .map((node) => ({
+              node,
+              key: node.dataset.feedKey,
+              rect: node.getBoundingClientRect(),
+            }))
+            .filter((item) => item.key && item.rect.width && item.rect.height)
+        : [];
     feed.classList.toggle("collapsed", collapsed);
     toggle.setAttribute("aria-expanded", String(!collapsed));
     toggle.setAttribute(
@@ -1435,6 +1568,7 @@ export function mountPresenter({
     if (!collapsed) {
       roomFeedUnread = 0;
       if (badge) badge.hidden = true;
+      animateCollapsedComments(feed, heroSources);
     } else {
       const picker = feed.querySelector(".room-emoji-picker"),
         emojiToggle = feed.querySelector(".room-emoji-toggle"),
@@ -1444,6 +1578,114 @@ export function mountPresenter({
       if (active && feed.contains(active)) active.blur();
     }
   }
+  function animateCollapsedComments(feed, sources) {
+    const toasts = feed.querySelector(".room-feed-toasts"),
+      items = [...feed.querySelectorAll("#roomFeedItems [data-feed-key]")],
+      pairs = sources
+        .map((source) => ({
+          source,
+          target: items.find((item) => item.dataset.feedKey === source.key),
+        }))
+        .filter(({ target }) => target);
+    if (!sources.length) {
+      toasts?.replaceChildren();
+      return;
+    }
+    for (const { target } of pairs) target.style.visibility = "hidden";
+    if (!pairs.length) {
+      toasts?.replaceChildren();
+      return;
+    }
+    let started = false;
+    const revealTargets = () => {
+      for (const { target } of pairs) target.style.removeProperty("visibility");
+    };
+    const startHero = () => {
+      if (started) return;
+      started = true;
+      if (feed.classList.contains("collapsed")) {
+        revealTargets();
+        toasts?.replaceChildren();
+        return;
+      }
+      let remaining = 0;
+      for (const { source, target } of pairs) {
+        const targetRect = target.getBoundingClientRect(),
+          hero = source.node.cloneNode(true);
+        if (!targetRect.width || !targetRect.height) {
+          target.style.removeProperty("visibility");
+          continue;
+        }
+        remaining += 1;
+        hero.classList.add("room-feed-hero");
+        hero.setAttribute("aria-hidden", "true");
+        Object.assign(hero.style, {
+          left: `${source.rect.left}px`,
+          top: `${source.rect.top}px`,
+          width: `${source.rect.width}px`,
+          height: `${source.rect.height}px`,
+        });
+        source.node.style.visibility = "hidden";
+        document.body.append(hero);
+        const animation = hero.animate(
+          [
+            {
+              left: `${source.rect.left}px`,
+              top: `${source.rect.top}px`,
+              width: `${source.rect.width}px`,
+              height: `${source.rect.height}px`,
+              opacity: 1,
+            },
+            {
+              left: `${targetRect.left}px`,
+              top: `${targetRect.top}px`,
+              width: `${targetRect.width}px`,
+              height: `${targetRect.height}px`,
+              opacity: 1,
+            },
+          ],
+          {
+            duration: 340,
+            easing: "cubic-bezier(.2,.78,.22,1)",
+            fill: "forwards",
+          },
+        );
+        animation.finished
+          .catch(() => {})
+          .finally(() => {
+            hero.remove();
+            target.style.removeProperty("visibility");
+            target.animate([{ opacity: 0.72 }, { opacity: 1 }], {
+              duration: 100,
+              easing: "ease-out",
+            });
+            remaining -= 1;
+            if (!remaining) toasts?.replaceChildren();
+          });
+      }
+      if (!remaining) toasts?.replaceChildren();
+    };
+    requestAnimationFrame(() => {
+      const expanded = feed.querySelector(".room-feed-expanded"),
+        transitions = [feed, expanded]
+          .flatMap((node) => node?.getAnimations?.() || [])
+          .filter((animation) => animation.playState === "running");
+      if (transitions.length)
+        Promise.allSettled(
+          transitions.map((animation) => animation.finished),
+        ).then(startHero);
+      else requestAnimationFrame(startHero);
+      hostWindow.setTimeout(startHero, 360);
+    });
+  }
+  const roomCommentClass = (comment) =>
+    comment.authorRole === "host"
+      ? "is-host"
+      : comment.authorRole === "system"
+        ? "is-system"
+        : "";
+  const roomCommentMarkup = (comment) =>
+    `<b>${escapeHTML(comment.name || "匿名观众")}${comment.authorRole === "host" ? "<em>房主</em>" : comment.authorRole === "system" ? "<em>系统</em>" : ""}</b><p>${escapeHTML(comment.body)}</p>`;
   function showCollapsedComment(comment) {
     const feed = $("roomLiveFeed"),
       toasts = $("roomFeedToasts"),
@@ -1455,7 +1697,9 @@ export function mountPresenter({
       badge.hidden = false;
     }
     const toastItem = document.createElement("article");
-    toastItem.innerHTML = `<b>${escapeHTML(comment.name || "匿名观众")}</b><p>${escapeHTML(comment.body)}</p>`;
+    toastItem.dataset.feedKey = `comment:${comment.id}`;
+    toastItem.className = roomCommentClass(comment);
+    toastItem.innerHTML = roomCommentMarkup(comment);
     toasts.append(toastItem);
     while (toasts.children.length > 3) toasts.firstElementChild.remove();
     hostWindow.setTimeout(() => toastItem.classList.add("leaving"), 3800);
@@ -1569,12 +1813,8 @@ export function mountPresenter({
           reuse(
             `comment:${comment.id}`,
             "article",
-            comment.authorRole === "host"
-              ? "is-host"
-              : comment.authorRole === "system"
-                ? "is-system"
-                : "",
-            `<b>${escapeHTML(comment.name || "匿名观众")}${comment.authorRole === "host" ? "<em>房主</em>" : comment.authorRole === "system" ? "<em>系统</em>" : ""}</b><p>${escapeHTML(comment.body)}</p>`,
+            roomCommentClass(comment),
+            roomCommentMarkup(comment),
           ),
         );
       }
@@ -1658,7 +1898,7 @@ export function mountPresenter({
       ["directory", "查看目录", "浏览演示页面结构", "overview"],
       ["notes", "查看备注", "阅读当前页面备注", "notes"],
       ["interaction", "参与互动", "评论、投票与评分", "audience"],
-      ["downloadPdf", "下载 PDF", "保存演示文稿副本", "print"],
+      ["download", "允许导出", "导出 ZIP、PDF、PPT 或 HTML", "export"],
       ["showInteractionFeed", "互动浮层", "在放映页展示实时消息", "flag"],
       ["showOnlineCount", "在线状态", "显示人数与连接延迟", "users"],
     ];
@@ -1832,37 +2072,11 @@ export function mountPresenter({
       };
     });
   }
-  function rememberRoomSession(session) {
-    const saved = JSON.stringify({
-      token: session.token,
-      hostToken: session.hostToken,
-      savedAt: Date.now(),
-    });
-    try {
-      hostWindow.sessionStorage.setItem(roomHostKey, saved);
-      localStorage.setItem(roomHostKey, saved);
-    } catch {}
-  }
   function forgetRoomSession() {
     try {
       hostWindow.sessionStorage.removeItem(roomHostKey);
       localStorage.removeItem(roomHostKey);
     } catch {}
-  }
-  function rememberedRoomSession() {
-    let saved;
-    try {
-      saved = JSON.parse(
-        hostWindow.sessionStorage.getItem(roomHostKey) ||
-          localStorage.getItem(roomHostKey),
-      );
-    } catch {}
-    if (!saved?.token || !saved?.hostToken) return null;
-    if (saved.savedAt && Date.now() - saved.savedAt > 8 * 60 * 60 * 1000) {
-      forgetRoomSession();
-      return null;
-    }
-    return { ...saved, savedAt: saved.savedAt || Date.now() };
   }
   async function endRoom() {
     try {
@@ -1875,6 +2089,7 @@ export function mountPresenter({
     roomSocket?.close();
     roomSocket = null;
     roomSession = null;
+    roomRestoreState = "idle";
     audienceSession = null;
     hostWindow.clearInterval(audienceInterval);
     hostWindow.clearInterval(roomPingInterval);
@@ -1943,7 +2158,7 @@ export function mountPresenter({
                 "directory",
                 "notes",
                 "interaction",
-                "downloadPdf",
+                "download",
                 "showInteractionFeed",
                 "showOnlineCount",
               ].map((key) => [key, values.has(key)]),
@@ -1951,7 +2166,8 @@ export function mountPresenter({
           },
         });
         audienceSession = roomSession.interaction;
-        rememberRoomSession(roomSession);
+        roomRestoreState = "active";
+        forgetRoomSession();
         roomTab = "settings";
         connectRoom();
         ensureRoomChrome();
@@ -1963,28 +2179,50 @@ export function mountPresenter({
       }
     };
   }
+  function renderRoomRestoring(reconnecting = false) {
+    const body = $("roomBody"),
+      panel = $("roomPanel");
+    panel?.classList.remove("room-setup-mode", "room-dashboard-mode");
+    body.className = "session-loading";
+    body.innerHTML = `${ico("loaderCircle", "spin")}<span>${reconnecting ? "正在重新连接房间…" : "正在恢复房间…"}</span>`;
+  }
   async function restoreRoomSession() {
-    const saved = rememberedRoomSession();
-    if (!saved) return;
+    roomRestoreState = "restoring";
+    if ($("roomPanel") && !$("roomPanel").hidden) renderRoomRestoring();
     try {
-      roomSession = await sessionRequest(`/rooms/${saved.token}/host`, {
-        headers: { "X-Room-Host": saved.hostToken },
-      });
-      rememberRoomSession(roomSession);
+      const result = await sessionRequest(
+        `/rooms/active?deckId=${encodeURIComponent(deckId)}`,
+      );
+      if (!result.room) {
+        roomSession = null;
+        audienceSession = null;
+        roomRestoreState = "idle";
+        forgetRoomSession();
+        if ($("roomPanel") && !$("roomPanel").hidden) renderRoomSetup();
+        return;
+      }
+      roomSession = result.room;
+      forgetRoomSession();
       audienceSession = roomSession.interaction;
       roomTab = "settings";
       if (Number.isFinite(roomSession.page)) go(roomSession.page, false);
       roomRestoreDelay = 700;
+      roomRestoreState = "active";
       connectRoom();
       ensureRoomChrome();
       startAudiencePolling();
+      if ($("roomPanel") && !$("roomPanel").hidden) renderRoom();
     } catch (error) {
       roomSession = null;
       audienceSession = null;
-      if (error.status === 403) {
+      if ([401, 403].includes(error.status)) {
+        roomRestoreState = "idle";
         forgetRoomSession();
+        if ($("roomPanel") && !$("roomPanel").hidden) renderRoomSetup();
         return;
       }
+      roomRestoreState = "retrying";
+      if ($("roomPanel") && !$("roomPanel").hidden) renderRoomRestoring(true);
       hostWindow.clearTimeout(roomRestoreTimer);
       const delay = roomRestoreDelay + Math.random() * 180;
       roomRestoreDelay = Math.min(8000, roomRestoreDelay * 1.65);
@@ -1994,6 +2232,8 @@ export function mountPresenter({
   function openRoom() {
     openPanel("roomPanel");
     if (roomSession) renderRoom();
+    else if (["restoring", "retrying"].includes(roomRestoreState))
+      renderRoomRestoring(roomRestoreState === "retrying");
     else renderRoomSetup();
   }
   function captureAudienceDraft() {
@@ -2401,16 +2641,26 @@ export function mountPresenter({
       closeRoomInteractionPopover($("roomRatingPopover"), true);
     }
 
-    downloadURL = nextRoom.downloadURL || null;
-    if (permissions.downloadPdf && downloadURL && !$("roomDownloadBtn")) {
+    exportURL = nextRoom.exportURL || null;
+    if (backgroundExportAvailable() && !exportNotifications.isConnected)
+      document.body.append(exportNotifications);
+    if (permissions.download && exportURL && !$("exportBtn")) {
       dockTools.insertAdjacentHTML(
         "beforeend",
-        dockButton("roomDownloadBtn", "print", "下载 PDF"),
+        dockButton(
+          "exportBtn",
+          "export",
+          "导出",
+          'aria-haspopup="menu" aria-expanded="false"',
+        ),
       );
-      $("roomDownloadBtn").onclick = () =>
-        (hostWindow.location.href = downloadURL);
+      $("exportBtn").onclick = (event) =>
+        openExportFormats(event.currentTarget);
     }
-    $("roomDownloadBtn")?.toggleAttribute("hidden", !permissions.downloadPdf);
+    $("exportBtn")?.toggleAttribute(
+      "hidden",
+      !permissions.download || !exportURL,
+    );
 
     const showFeed =
       permissions.interaction &&
@@ -2425,9 +2675,160 @@ export function mountPresenter({
     }
     applyRoomFeedPermissions(permissions);
   }
-  function act(action) {
+  const exportFormatLabel = (format) =>
+    exportFormats.find(([value]) => value === format)?.[1] || format;
+  const exportRetentionLabel = (job) => {
+    const minutes = Number(job.retentionMinutes || 60);
+    if (minutes < 60) return `${minutes} 分钟`;
+    if (minutes < 1440) return `${minutes / 60} 小时`;
+    return `${minutes / 1440} 天`;
+  };
+  const exportPath = () =>
+    exportURL.startsWith("/api") ? exportURL.slice(4) : exportURL;
+  function exportReady(job) {
+    const card = document.createElement("section");
+    card.className = "player-export-notice ready";
+    card.innerHTML = `<span class="player-export-icon">${ico("check")}</span><div><b>${escapeHTML(exportFormatLabel(job.format))}已生成</b><small>文件将在 ${exportRetentionLabel(job)}后自动清理</small></div><a href="${escapeHTML(job.downloadURL)}" download>下载</a><button type="button" aria-label="关闭提示">${ico("close")}</button>`;
+    card.querySelector("a").onclick = (event) => {
+      event.preventDefault();
+      downloadExportJob(job);
+    };
+    card.querySelector("button").onclick = () => card.remove();
+    exportNotifications.append(card);
+    return card;
+  }
+  function downloadExportJob(job) {
+    if (!job?.downloadURL) return;
+    const download = hostWindow.document.createElement("a");
+    download.href = job.downloadURL;
+    download.download = "";
+    hostWindow.document.body.append(download);
+    download.click();
+    download.remove();
+  }
+  function refreshExportMenu() {
+    const menu = $("moreMenu");
+    if (menu.hidden || menuAnchor?.id !== "exportBtn") return;
+    showExportFormats(false, false);
+    const r = menuAnchor.getBoundingClientRect();
+    placeMenu(
+      menu,
+      r.left - 20,
+      r.top - menu.getBoundingClientRect().height - 14,
+    );
+  }
+  async function pollExportJob(format, state, initial, notify = true) {
+    if (state.polling) return;
+    state.polling = true;
+    let job = initial;
+    try {
+      while (!["ready", "error"].includes(job.status)) {
+        await new Promise((resolve) => hostWindow.setTimeout(resolve, 850));
+        job = await sessionRequest(
+          `${exportPath()}/${encodeURIComponent(job.id)}`,
+        );
+        state.job = job;
+        state.status = job.status;
+        refreshExportMenu();
+      }
+      if (job.status === "ready") {
+        state.job = job;
+        state.status = "ready";
+        if (notify) exportReady(job);
+      } else {
+        exportStates.delete(format);
+        toast(job.error || "导出失败，请重试");
+      }
+      refreshExportMenu();
+    } catch (error) {
+      exportStates.delete(format);
+      toast(error.message || "导出失败，请重试");
+      refreshExportMenu();
+    } finally {
+      state.polling = false;
+    }
+  }
+  async function syncExportStates() {
+    if (!backgroundExportAvailable()) return;
+    if (exportSyncPromise) return exportSyncPromise;
+    exportSyncPromise = (async () => {
+      try {
+        const result = await sessionRequest(exportPath()),
+          present = new Set();
+        for (const job of result.jobs || []) {
+          present.add(job.format);
+          let state = exportStates.get(job.format);
+          if (!state) {
+            state = { status: job.status, job, polling: false };
+            exportStates.set(job.format, state);
+          } else {
+            state.status = job.status;
+            state.job = job;
+          }
+          if (["queued", "running"].includes(job.status))
+            void pollExportJob(job.format, state, job);
+        }
+        for (const [format, state] of exportStates)
+          if (!present.has(format) && state.status === "ready")
+            exportStates.delete(format);
+        refreshExportMenu();
+      } catch {}
+    })().finally(() => {
+      exportSyncPromise = null;
+    });
+    return exportSyncPromise;
+  }
+  async function startBackgroundExport(format) {
+    if (!backgroundExportAvailable()) return;
+    const existing = exportStates.get(format);
+    if (["queued", "running"].includes(existing?.status)) return;
+    if (existing?.status === "ready") {
+      downloadExportJob(existing.job);
+      return;
+    }
+    const state = { status: "queued", job: null };
+    exportStates.set(format, state);
+    toast(`${exportFormatLabel(format)}已开始后台生成`);
+    try {
+      const job = await sessionRequest(exportPath(), {
+        method: "POST",
+        body: { format },
+      });
+      state.job = job;
+      state.status = job.status;
+      refreshExportMenu();
+      await pollExportJob(format, state, job);
+    } catch (error) {
+      exportStates.delete(format);
+      toast(error.message || "导出失败，请重试");
+      refreshExportMenu();
+    }
+  }
+  async function act(action) {
     if (action.startsWith("tool:")) {
       setTool(action.slice(5));
+      return;
+    }
+    if (action === "export") {
+      showExportFormats();
+      return;
+    }
+    if (action === "export-back") {
+      fillMenus();
+      $("moreMenu")
+        .querySelector('[data-action="export"]')
+        ?.focus({ preventScroll: true });
+      return;
+    }
+    if (action.startsWith("export:")) {
+      closeMenus();
+      await startBackgroundExport(action.slice(7));
+      return;
+    }
+    if (action.startsWith("export-download:")) {
+      const state = exportStates.get(action.slice(16));
+      closeMenus();
+      downloadExportJob(state?.job);
       return;
     }
     closeMenus();
@@ -2478,10 +2879,9 @@ export function mountPresenter({
       case "print":
         finishDraw();
         closePanels();
+        pages.forEach((page) => loadSlideImages(page, "auto"));
+        await waitForSlideImages($("deck"), 15000);
         window.print();
-        break;
-      case "download":
-        hostWindow.location.href = downloadURL;
         break;
     }
   }
@@ -2505,9 +2905,8 @@ export function mountPresenter({
     $("roomPollBtn").onclick = () => openRoomInteraction("poll");
   if ($("roomRatingBtn"))
     $("roomRatingBtn").onclick = () => openRoomInteraction("rating");
-  if ($("roomDownloadBtn"))
-    $("roomDownloadBtn").onclick = () =>
-      (hostWindow.location.href = downloadURL);
+  if ($("exportBtn"))
+    $("exportBtn").onclick = (event) => openExportFormats(event.currentTarget);
   if ($("editBtn"))
     $("editBtn").onclick = () => {
       hostWindow.location.href = editURL + "#" + current;
@@ -2616,6 +3015,7 @@ export function mountPresenter({
         if (tool === "pointer" || tool === "eraser") setTool(t);
         else {
           syncUI();
+          syncPresenterTool();
           closeMenus();
           $("stage").focus({ preventScroll: true });
         }
@@ -2627,6 +3027,7 @@ export function mountPresenter({
         const t = tool === "highlighter" ? "highlighter" : "pen";
         widths[t] = +e.target.value;
         e.target.nextElementSibling.textContent = e.target.value;
+        syncPresenterTool();
       }
     });
     el.addEventListener("keydown", (e) => {
@@ -2689,7 +3090,7 @@ export function mountPresenter({
       closeRoomInteractionPopover(polls);
   });
   $("stage").addEventListener("contextmenu", (e) => {
-    if (panelOpen() || viewerMode) return;
+    if (panelOpen() || viewerMode || compactPresenter) return;
     e.preventDefault();
     cursorPoint = { clientX: e.clientX, clientY: e.clientY };
     finishDraw();
@@ -2752,6 +3153,9 @@ export function mountPresenter({
       hostWindow.clearTimeout(roomInkSyncTimer);
       roomInkSyncTimer = 0;
       syncRoomInk();
+      hostWindow.clearTimeout(presenterInkSyncTimer);
+      presenterInkSyncTimer = 0;
+      syncPresenterInk();
     }
     eatClickUntil = performance.now() + 350;
     try {
@@ -2822,6 +3226,7 @@ export function mountPresenter({
     if (drawing.path)
       drawing.path.setAttribute("d", pathData(drawing.stroke.points));
     if (drawing.changed) scheduleRoomInkSync();
+    if (drawing.changed) schedulePresenterInkSync();
   });
   $("stage").addEventListener("pointerup", (e) => {
     if (drawing && e.pointerId === drawing.id) {
@@ -2895,11 +3300,7 @@ export function mountPresenter({
     }
     const nextPage =
       current + (e.shiftKey || e.clientX < window.innerWidth / 2 ? -1 : 1);
-    if (e.target.closest(".zoomable")) {
-      if (e.detail > 1) return;
-      clearTimeout(imageClickTimer);
-      imageClickTimer = setTimeout(() => go(nextPage), 240);
-    } else go(nextPage);
+    go(nextPage);
   });
   const wheelStep = wheelNavigation((direction) => go(current + direction));
   $("stage").addEventListener(
@@ -2945,11 +3346,52 @@ export function mountPresenter({
       c.classList.add("visible");
     } else $("eraserCursor").classList.remove("visible");
   }
+  function applyPresenterPointer(pointer) {
+    const dot = $("roomPointer");
+    if (!pointer || pointer.page !== current || pointer.visible === false) {
+      dot.classList.remove("visible");
+      return;
+    }
+    const rect = $("deck").getBoundingClientRect(),
+      pointerTool = ["pointer", "laser", "pen", "highlighter"].includes(
+        pointer.tool,
+      )
+        ? pointer.tool
+        : "pointer";
+    if (dot.dataset.tool !== pointerTool) {
+      dot.dataset.tool = pointerTool;
+      dot.innerHTML = pointerTool === "laser" ? "" : ico(pointerTool);
+    }
+    dot.style.setProperty("--room-pointer-color", pointer.color || "#ff3b30");
+    dot.style.left = rect.left + pointer.x * rect.width + "px";
+    dot.style.top = rect.top + pointer.y * rect.height + "px";
+    dot.classList.add("visible");
+  }
   addEventListener("pointermove", (e) => {
     cursorPoint = { clientX: e.clientX, clientY: e.clientY };
     if (e.clientY > window.innerHeight - 110 && !drawing && !openMenu())
       showDock();
     updateToolCursor(cursorPoint, true);
+    if (
+      presenterChannel &&
+      !viewerMode &&
+      performance.now() - presenterPointerAt > 28
+    ) {
+      const point = slidePoint(e);
+      presenterPointerAt = performance.now();
+      presenterPost({
+        type: "pointer",
+        pointer: inside(point)
+          ? {
+              page: current,
+              x: point[0] / width,
+              y: point[1] / height,
+              tool,
+              color: inkColors[tool] || inkColors.laser,
+            }
+          : null,
+      });
+    }
     if (
       roomSession &&
       !viewerMode &&
@@ -2976,10 +3418,12 @@ export function mountPresenter({
     finishDraw();
     hideCursors();
     closeMenus();
+    presenterPost({ type: "pointer", pointer: null });
   });
   document.addEventListener("pointerleave", () => {
     cursorPoint = null;
     hideCursors();
+    presenterPost({ type: "pointer", pointer: null });
     if (roomSession && !viewerMode)
       roomSend({ type: "pointer", pointer: null });
   });
@@ -3051,6 +3495,11 @@ export function mountPresenter({
       return;
     }
     if (input) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+      e.preventDefault();
+      void act("print");
+      return;
+    }
     if (viewerMode) {
       const k = e.key.toLowerCase();
       if (k === "f") {
@@ -3076,6 +3525,7 @@ export function mountPresenter({
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+      if (compactPresenter) return;
       e.preventDefault();
       showMenu("contextMenu", {
         x: window.innerWidth / 2,
@@ -3088,6 +3538,16 @@ export function mountPresenter({
     if (e.target.tagName === "BUTTON" && [" ", "Enter"].includes(e.key)) return;
     const k = e.key.toLowerCase();
     if (drawing) return;
+    if (compactPresenter) {
+      const compactTool = Object.keys(toolKeys).find(
+        (name) => toolKeys[name].toLowerCase() === k,
+      );
+      if (compactTool) {
+        e.preventDefault();
+        setTool(compactTool);
+      }
+      return;
+    }
     if (["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key)) {
       e.preventDefault();
       go(current + 1);
@@ -3119,31 +3579,57 @@ export function mountPresenter({
       }
     }
   });
-  const timer = viewerMode
-    ? {
-        go() {},
-        toggle() {},
-        reset() {},
-        snapshot: () => ({ running: false, total: 0 }),
-      }
-    : mountTimer({
-        document,
-        hostWindow,
-        storage,
-        deckId,
-        pages,
-        notes: data,
-        icon: ico,
-        openPanel,
-        toast,
-      });
+  const timer =
+    viewerMode || compactPresenter
+      ? {
+          go() {},
+          toggle() {},
+          reset() {},
+          snapshot: () => ({ running: false, total: 0 }),
+        }
+      : mountTimer({
+          document,
+          hostWindow,
+          storage,
+          deckId,
+          pages,
+          notes: data,
+          icon: ico,
+          openPanel,
+          toast,
+        });
   if (presenterChannel)
     presenterChannel.onmessage = ({ data: message }) => {
-      if (message?.type === "request")
-        presenterChannel.postMessage({ type: "state", current, total });
+      if (!message || message.source === presenterInstanceId) return;
+      if (message.type === "request")
+        presenterPost({ type: "state", current, total });
       if (message?.type === "go") go(message.page);
       if (message?.type === "next") go(current + 1);
       if (message?.type === "prev") go(current - 1);
+      if (message.type === "tool") {
+        for (const name of ["pen", "highlighter", "laser"])
+          if (/^#[\da-f]{6}$/i.test(message.colors?.[name] || ""))
+            inkColors[name] = message.colors[name];
+        for (const name of ["pen", "highlighter"])
+          if (Number.isFinite(message.widths?.[name]))
+            widths[name] = Math.max(1, Math.min(60, message.widths[name]));
+        if (["pen", "highlighter"].includes(message.lastPaint))
+          lastPaint = message.lastPaint;
+        setTool(message.tool, false);
+      }
+      if (
+        message.type === "ink" &&
+        Number.isInteger(message.page) &&
+        message.page >= 1 &&
+        message.page <= total &&
+        Array.isArray(message.strokes)
+      ) {
+        cleanInk({ [inkKey(message.page)]: message.strokes });
+        renderInk(message.page);
+        persist();
+        syncUI();
+      }
+      if (message.type === "pointer") applyPresenterPointer(message.pointer);
     };
   document.querySelectorAll("[data-close]").forEach(
     (b) =>
@@ -3169,35 +3655,84 @@ export function mountPresenter({
   document.querySelectorAll(".slide img").forEach((img) => {
     if (img.closest(".corner-brand,footer,.brand,a,[data-editor-href]")) return;
     img.classList.add("zoomable");
-    img.tabIndex = 0;
-    img.setAttribute("role", "button");
-    img.setAttribute("aria-label", "双击查看图片：" + (img.alt || "图片"));
   });
+  const imagePreviewTrigger = document.createElement("button");
+  imagePreviewTrigger.id = "imagePreviewTrigger";
+  imagePreviewTrigger.type = "button";
+  imagePreviewTrigger.hidden = true;
+  imagePreviewTrigger.innerHTML = ico("zoom");
+  document.body.append(imagePreviewTrigger);
+  let imagePreviewSource = null;
+
+  function hideImagePreview() {
+    imagePreviewSource = null;
+    imagePreviewTrigger.hidden = true;
+  }
+  function positionImagePreview() {
+    if (!imagePreviewSource?.isConnected || imagePreviewTrigger.hidden) return;
+    const rect = imagePreviewSource.getBoundingClientRect(),
+      size = 40,
+      gap = 10;
+    if (
+      rect.right <= 0 ||
+      rect.bottom <= 0 ||
+      rect.left >= window.innerWidth ||
+      rect.top >= window.innerHeight
+    ) {
+      hideImagePreview();
+      return;
+    }
+    imagePreviewTrigger.style.left =
+      Math.max(
+        8,
+        Math.min(window.innerWidth - size - 8, rect.right - size - gap),
+      ) + "px";
+    imagePreviewTrigger.style.top =
+      Math.max(8, Math.min(window.innerHeight - size - 8, rect.top + gap)) +
+      "px";
+  }
+  function showImagePreview(img) {
+    if (!img || !["pointer", "laser"].includes(tool)) return;
+    imagePreviewSource = img;
+    imagePreviewTrigger.setAttribute(
+      "aria-label",
+      "预览图片：" + (img.alt || "图片"),
+    );
+    imagePreviewTrigger.hidden = false;
+    positionImagePreview();
+  }
   function showFigure(img) {
     if (
       (!["pointer", "laser"].includes(tool) && !img.closest("#notes")) ||
       performance.now() < eatClickUntil
     )
       return;
-    clearTimeout(imageClickTimer);
     figureReturn = img.closest("#notes") ? "notes" : null;
     openPanel("figureViewer");
     lightbox.open(img);
   }
-  document.addEventListener("dblclick", (e) => {
-    const img = e.target.closest(".zoomable");
-    if (img) {
-      e.preventDefault();
-      e.stopPropagation();
-      showFigure(img);
-    }
+  document.addEventListener("pointerover", (e) => {
+    const img = e.target.closest?.(".zoomable");
+    if (img) showImagePreview(img);
   });
-  document.addEventListener("keydown", (e) => {
-    const img = e.target.closest(".zoomable");
-    if (img && e.key === "Enter") {
-      e.preventDefault();
-      showFigure(img);
-    }
+  document.addEventListener("pointerout", (e) => {
+    const img = e.target.closest?.(".zoomable");
+    if (
+      img &&
+      e.relatedTarget !== imagePreviewTrigger &&
+      !imagePreviewTrigger.contains(e.relatedTarget)
+    )
+      hideImagePreview();
+  });
+  imagePreviewTrigger.addEventListener("pointerleave", (e) => {
+    if (e.relatedTarget !== imagePreviewSource) hideImagePreview();
+  });
+  imagePreviewTrigger.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const img = imagePreviewSource;
+    hideImagePreview();
+    if (img) showFigure(img);
   });
   addEventListener("resize", () => {
     size();
@@ -3218,8 +3753,16 @@ export function mountPresenter({
     );
     size();
   });
+  addEventListener("beforeprint", () => {
+    pages.forEach((page) => loadSlideImages(page, "auto"));
+  });
   addEventListener("beforeunload", () => {
+    prepareGeneration += 1;
+    window.cancelIdleCallback?.(prepareJob);
+    window.cancelAnimationFrame(prepareJob);
     finishDraw();
+    hostWindow.clearTimeout(presenterInkSyncTimer);
+    presenterPost({ type: "pointer", pointer: null });
     try {
       localStorage.setItem(STORE, savedInk());
     } catch {}
@@ -3246,7 +3789,8 @@ export function mountPresenter({
     $("notesBtn").hidden = true;
   size();
   go(viewerMode ? initialPage : fromHash());
-  if (!viewerMode && presenterURL) void restoreRoomSession();
+  if (!viewerMode && presenterURL && !compactPresenter)
+    void restoreRoomSession();
   showDock(3500);
   window.presentation = {
     go,
@@ -3261,6 +3805,9 @@ export function mountPresenter({
     undo,
     redo,
     clearInk,
+    toggleOverview() {
+      togglePanel("overview");
+    },
     applyRoomState(state) {
       if (!state) return;
       if (state.ink)

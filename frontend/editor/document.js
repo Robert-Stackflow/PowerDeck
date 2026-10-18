@@ -1,7 +1,9 @@
 import { esc } from "../api.js";
 
 export function parseSlides(html) {
-  const doc = new DOMParser().parseFromString(html, "text/html");
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const doc = template.content;
   doc
     .querySelectorAll("script,style,iframe,object,embed,base,meta,link,form")
     .forEach((node) => node.remove());
@@ -18,7 +20,7 @@ export function parseSlides(html) {
     }
   });
   const slides = [...doc.querySelectorAll(".slide")].filter(
-    (slide) => !slide.parentElement.closest(".slide"),
+    (slide) => !slide.parentElement?.closest(".slide"),
   );
   if (!slides.length || slides.length > 200)
     throw new Error('页面需要包含 1–200 个 class="slide" 的元素。');
@@ -49,7 +51,24 @@ export function visualDocument({
     #deck>.slide[data-ve-current]{display:block!important}
     #deck *{animation:none!important;transition:none!important;caret-color:#276455}
     #deck [data-ve-editing]{outline:2px solid #458c78!important;outline-offset:4px;cursor:text!important;user-select:text!important;white-space:pre-wrap}
-    ${thumbnail ? `#deck{--ve-scale:calc(100vw / ${width}px)!important}#deck>.slide{display:block!important}` : `#deck{user-select:none;touch-action:none}#deck a{cursor:default!important}#deck [data-ve-selected]{outline:1px solid #3c8a7280!important;outline-offset:2px}#ve-selection{position:fixed;border:1.5px solid #3c8a72;pointer-events:none;z-index:2147483646;box-sizing:border-box}#ve-selection[hidden]{display:none!important}#ve-selection button{all:initial;position:absolute;box-sizing:border-box;width:10px;height:10px;background:#fff;border:1.5px solid #3c8a72;border-radius:2px;pointer-events:auto;touch-action:none}#ve-selection[data-multi=true] button{display:none}#ve-selection [data-handle=nw]{left:-5px;top:-5px;cursor:nwse-resize}#ve-selection [data-handle=ne]{right:-5px;top:-5px;cursor:nesw-resize}#ve-selection [data-handle=sw]{left:-5px;bottom:-5px;cursor:nesw-resize}#ve-selection [data-handle=se]{right:-5px;bottom:-5px;cursor:nwse-resize}`}
+    ${
+      thumbnail
+        ? `#deck{--ve-scale:calc(100vw / ${width}px)!important}#deck>.slide{display:block!important}`
+        : `
+      #deck{user-select:none;touch-action:none}
+      #deck a{cursor:default!important}
+      #deck[data-ve-multi] [data-ve-selected]:not([data-ve-editing]){outline:1px dashed #3c8a7260!important;outline-offset:0}
+      #ve-selection{position:fixed;border:1px solid #3c8a72;pointer-events:none;z-index:2147483646;box-sizing:border-box}
+      #ve-selection[hidden]{display:none!important}
+      #ve-selection button{all:initial;position:absolute;box-sizing:border-box;width:8px;height:8px;background:#fff;border:1px solid #3c8a72;border-radius:2px;pointer-events:auto;touch-action:none}
+      #ve-selection button::after{content:"";position:absolute;inset:-5px}
+      #ve-selection[data-multi=true] button{display:none}
+      #ve-selection [data-handle=nw]{left:-4px;top:-4px;cursor:nwse-resize}
+      #ve-selection [data-handle=ne]{right:-4px;top:-4px;cursor:nesw-resize}
+      #ve-selection [data-handle=sw]{left:-4px;bottom:-4px;cursor:nesw-resize}
+      #ve-selection [data-handle=se]{right:-4px;bottom:-4px;cursor:nwse-resize}
+    `
+    }
   </style></head><body><div id="stage"><div id="deck">${html}</div></div></body></html>`;
 }
 

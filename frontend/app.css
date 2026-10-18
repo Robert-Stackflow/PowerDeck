@@ -941,6 +941,92 @@ textarea {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+#exportNotifications {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 105;
+  width: min(410px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  pointer-events: none;
+}
+.export-notice {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 13px 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  color: var(--ink);
+  box-shadow: 0 15px 48px #17392b28;
+  backdrop-filter: blur(22px) saturate(120%);
+  pointer-events: auto;
+  animation: export-notice-in 180ms ease-out both;
+}
+.export-notice-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--light);
+  color: var(--green);
+}
+.export-notice.error .export-notice-icon {
+  background: #fff0ee;
+  color: var(--danger);
+}
+.export-notice-icon .lucide {
+  width: 19px;
+  height: 19px;
+}
+.export-notice > div {
+  min-width: 0;
+}
+.export-notice b,
+.export-notice small {
+  display: block;
+}
+.export-notice b {
+  font-size: 14px;
+}
+.export-notice small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.export-notice > .button {
+  min-height: 34px;
+  padding: 7px 14px;
+}
+.export-notice > .icon-button {
+  width: 32px;
+  height: 32px;
+}
+@keyframes export-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+@media (max-width: 600px) {
+  #exportNotifications {
+    right: 16px;
+    bottom: 16px;
+  }
+  .export-notice {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+  .export-notice > .button {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
 dialog {
   border: 1px solid #ffffffa0;
   background: var(--paper);
